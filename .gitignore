@@ -1,0 +1,34 @@
+# Secrets and local environment
+.env
+*.env.local
+secrets/
+!secrets/README.md
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+*.trx
+coverage*.xml
+artifacts/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Editors and OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+Thumbs.db
+.DS_Store
+
+# Local runtime data
+data/
+*.log
