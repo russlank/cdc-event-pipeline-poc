@@ -14,8 +14,12 @@ queries, replay, idempotency, and monitoring. Synthetic HR/pay data only.
 | Source database `HrCore` | SQL Server 2022 with CDC and SQL Server Agent |
 | Broker | Apache Kafka, single node, KRaft |
 | CDC | Kafka Connect + Debezium SQL Server connector |
-| Contracts | Business event schemas in a schema registry |
+| Contracts | Avro schemas in Confluent Schema Registry |
 | Event Translator | .NET 10 worker: raw CDC → business events |
-| Pay History Projector | .NET 10 worker: business events → bitemporal read model |
+| Pay History Projector | .NET 10 worker: business events → bitemporal read model in PostgreSQL |
 | Pay Query API | ASP.NET Core minimal API: as-of salary queries |
 | Monitoring | Prometheus, Grafana, Alertmanager |
+
+## License
+
+MIT, see [LICENSE](LICENSE).
