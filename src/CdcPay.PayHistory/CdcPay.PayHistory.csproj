@@ -4,4 +4,17 @@
     <TargetFramework>$(AppTargetFramework)</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CdcPay.Contracts\CdcPay.Contracts.csproj" />
+  </ItemGroup>
+
+  <!-- The read-model schema lives in db/readmodel; the projector applies it from these resources. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\db\readmodel\*.sql" LogicalName="readmodel.%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

@@ -1,7 +1,8 @@
 using CdcPay.Common.Hosting;
+using CdcPay.PayHistoryProjector;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-builder.AddServiceDefaults(typeof(Program).Assembly);
+builder.AddPayHistoryProjector();
 
 WebApplication app = builder.Build();
 app.MapServiceEndpoints();

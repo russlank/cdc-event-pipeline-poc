@@ -75,6 +75,16 @@ the host, and on restart it resumes from the committed offsets. Because event
 ids are deterministic, any duplicate this produces is recognisable downstream.
 
 
+## Pay History Projector and Query API
+
+`src/CdcPay.PayHistory` holds the read model: the bitemporal merge, a pure
+function from current rows and one pay fact to a plan of closed, deleted, and
+inserted rows; the PostgreSQL store that runs the plan in one transaction with
+the event's `processed_event` row; and the reader behind the as-of queries.
+`src/CdcPay.PayHistoryProjector` is the consumer host: it stores an event's
+offset only after its transaction commits. `src/CdcPay.PayQueryApi` serves the
+queries with a read-only login. Details: [read-model.md](read-model.md).
+
 ## Design Decisions
 
 - **Business events, not table mirrors.** One source transaction that states

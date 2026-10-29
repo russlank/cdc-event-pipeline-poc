@@ -1,8 +1,8 @@
-using CdcPay.Common.Hosting;
+using CdcPay.PayQueryApi;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-builder.AddServiceDefaults(typeof(Program).Assembly);
+builder.AddPayQueryApi();
 
 WebApplication app = builder.Build();
-app.MapServiceEndpoints();
+app.MapPayQueryApi();
 app.Run();

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The .NET quality gates, shared by every CI pipeline and runnable locally:
-# restore, Release build (warnings and style are errors), tests, format check.
+# restore, Release build (warnings and style are errors), unit tests, format check.
+# Integration tests need Kafka, Schema Registry, and PostgreSQL: ci/integration-tests.sh.
 #
 # Usage: ci/dotnet-gates.sh [branch] [repository-url]
 #   branch and repository URL are embedded in the build identity when given.
@@ -24,8 +25,8 @@ dotnet restore ./CdcPay.slnx
 step "build"
 dotnet build ./CdcPay.slnx -c Release --no-restore "${build_props[@]}"
 
-step "test"
-dotnet test ./CdcPay.slnx -c Release --no-build
+step "unit tests"
+dotnet test --project CdcPay.UnitTests/CdcPay.UnitTests.csproj -c Release --no-build
 
 step "format"
 dotnet format ./CdcPay.slnx --verify-no-changes

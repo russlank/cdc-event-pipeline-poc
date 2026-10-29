@@ -11,6 +11,20 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: The first read-model design would have mixed pay components
+
+- **Symptom:** none at run time; found while writing the merge. The design
+  merged every salary fact over all current rows of the employee.
+- **Cause:** the design predates `payComponent` (contract v2). An allowance
+  raise covers the same days as the base salary, so the merge would have
+  closed the base rows and stated the allowance as the employee's only pay.
+- **Fix:** the history is kept per pay component (`pay_history.pay_component`)
+  and an exclusion constraint allows one current amount per component and
+  day. Test: `Apply_AnotherPayComponent_LeavesBasePayAlone`. A termination
+  ends every component.
+- **Lesson:** a contract change needs a check of every consumer's model, not
+  only of its deserializer.
+
 ### 2026-10-29: Redelivered transaction blocks the translator for a minute
 
 - **Symptom:** after the Salary capture-instance switch, a raise and a

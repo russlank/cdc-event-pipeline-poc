@@ -16,6 +16,11 @@ lists them. Compose passes them to the containers that need them.
 | Variable | Used by | Notes |
 |---|---|---|
 | `MSSQL_SA_PASSWORD` | `sqlserver`, `db-init`, `connect` | SQL Server password policy: at least 8 characters with upper, lower, digit, and symbol |
+| `POSTGRES_PASSWORD` | `postgres`, `pay-history-projector` | the read model's owner login `payhistory` |
+| `PAYQUERY_DB_PASSWORD` | `postgres`, `pay-query-api` | the read-only login `pay_query`, created by `db/readmodel/init/create-query-role.sh` |
+
+The PostgreSQL passwords go into connection strings, so they must not contain
+`;`.
 
 The Debezium connector configuration references the password as
 `${env:MSSQL_SA_PASSWORD}` (Kafka's `EnvVarConfigProvider`), so it is never
@@ -32,6 +37,10 @@ All ports bind to `127.0.0.1`.
 | 8081 | Schema Registry |
 | 8083 | Kafka Connect REST |
 | 8080 | Kafka UI |
+| 5432 | PostgreSQL (read model) |
+| 5101 | Event Translator (health, identity) |
+| 5102 | Pay History Projector (health, identity) |
+| 5103 | Pay Query API |
 
 ## Service Settings
 
@@ -52,4 +61,20 @@ settings are validated at startup.
 | `Translation:TransactionTimeout` | `00:01:00` | incomplete transactions are dead-lettered after this |
 | `Translation:SupportedCurrencies` | `SEK, EUR, NOK, DKK, USD` | other currencies are dead-lettered |
 
-The translator serves its health and identity endpoints on `127.0.0.1:5101`.
+### Pay History Projector
+
+| Setting | Default | Notes |
+|---|---|---|
+| `Kafka:BootstrapServers` | `127.0.0.1:29092` | compose: `kafka:9092` |
+| `Kafka:SchemaRegistryUrl` | `http://127.0.0.1:8081` | compose: `http://schema-registry:8081` |
+| `Kafka:ConsumerGroup` | `cdcpay-pay-history-projector` | |
+| `Kafka:Topic` | `hr.employee-pay.v1` | |
+| `Kafka:CommitInterval` | `00:00:01` | offsets of applied events are committed this often |
+| `Kafka:RetryDelay` | `00:00:02` | wait between attempts while PostgreSQL or the Schema Registry is unreachable |
+| `ConnectionStrings:ReadModel` | none, required | Npgsql connection string of the owner login |
+
+### Pay Query API
+
+| Setting | Default | Notes |
+|---|---|---|
+| `ConnectionStrings:ReadModel` | none, required | Npgsql connection string of the read-only login |

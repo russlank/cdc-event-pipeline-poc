@@ -2,16 +2,16 @@ using System.Net;
 using System.Net.Http.Json;
 using CdcPay.Common;
 using CdcPay.Common.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
+using CdcPay.UnitTests.PayQueryApi;
 
 namespace CdcPay.UnitTests.Common;
 
-public sealed class ServiceEndpointsTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+public sealed class ServiceEndpointsTests(QueryApiFactory factory) : IClassFixture<QueryApiFactory>
 {
     [Theory]
     [InlineData(ServiceDefaultsExtensions.LivePath)]
     [InlineData(ServiceDefaultsExtensions.ReadyPath)]
-    public async Task HealthEndpoint_WithoutDependencies_ReturnsHealthy(string path)
+    public async Task HealthEndpoint_WithReadModelAvailable_ReturnsHealthy(string path)
     {
         using HttpClient client = factory.CreateClient();
 

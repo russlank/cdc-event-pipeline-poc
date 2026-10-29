@@ -10,12 +10,20 @@ How the code is tested and how to run the checks.
 
 ## Gates
 
-`ci/dotnet-gates.sh` runs all four .NET gates and `ci/schema-compat.sh` the
-contract compatibility gate; both CI pipelines (`.woodpecker.yml` and
-`.github/workflows/ci.yml`) run both. Locally:
+Three gate scripts; both CI pipelines (`.woodpecker.yml` and
+`.github/workflows/ci.yml`) run all three:
+
+| Script | Gate |
+|---|---|
+| `ci/dotnet-gates.sh` | restore, build, unit tests, format |
+| `ci/integration-tests.sh` | integration tests against Kafka, Schema Registry, and PostgreSQL |
+| `ci/schema-compat.sh` | contract compatibility |
+
+Locally:
 
 ```sh
 bash ci/dotnet-gates.sh            # optional: <branch> <repository-url> for the build identity
+bash ci/integration-tests.sh       # needs Docker (Testcontainers)
 sh ci/schema-compat.sh http://127.0.0.1:8081
 ```
 
@@ -24,7 +32,7 @@ The same gates by hand, from `src/`:
 ```sh
 dotnet restore ./CdcPay.slnx
 dotnet build ./CdcPay.slnx -c Release --no-restore
-dotnet test ./CdcPay.slnx -c Release --no-build
+dotnet test --project CdcPay.UnitTests/CdcPay.UnitTests.csproj -c Release --no-build
 dotnet format ./CdcPay.slnx --verify-no-changes
 ```
 
@@ -36,11 +44,19 @@ also means `dotnet format` finds nothing. Tests run on Microsoft.Testing.Platfor
 
 | Project | Scope |
 |---|---|
-| `CdcPay.UnitTests` | pure logic and in-memory host tests (`WebApplicationFactory`): identity, event ids, Debezium parsing (fixtures recorded from the real connector in `Translation/Fixtures`), transaction assembly including redelivery, offsets, every classification rule, Avro round trips, contract drift, v1/v2 resolution in both directions |
+| `CdcPay.UnitTests` | pure logic and in-memory host tests (`WebApplicationFactory`): identity, event ids, Debezium parsing (fixtures recorded from the real connector in `Translation/Fixtures`), transaction assembly including redelivery, offsets, every classification rule, Avro round trips, contract drift, v1/v2 resolution in both directions, every case of the bitemporal merge, event-to-fact mapping, as-of parameter parsing, and each Query API endpoint against an in-memory reader |
+| `CdcPay.IntegrationTests` | the projector host against real Kafka, Schema Registry, and PostgreSQL: a fixture stream (with a redelivered event) becomes the expected history, offsets are committed to the end, a replay with a new consumer group changes nothing; the schema applies twice; the no-overlap constraint holds |
 
-Integration tests against Kafka, Schema Registry, and PostgreSQL
-(Testcontainers) join with the projector. End-to-end checks against the
-running stack are the scenario scripts in `scripts/scenarios/`.
+The integration tests start their own containers with Testcontainers. When
+`CDCPAY_IT_KAFKA`, `CDCPAY_IT_SCHEMA_REGISTRY`, and `CDCPAY_IT_POSTGRES` (an
+Npgsql connection string with the right to create databases) are all set, they
+use those services instead; Woodpecker does this with service containers.
+Every test gets its own topic, subject, and database.
+
+End-to-end checks against the running stack are the scenario scripts in
+`scripts/scenarios/`: 01 snapshot and read model, 02 raise next month, 03
+retroactive raise with as-of queries, 04 correction, 05 hire in one
+transaction.
 
 ## Conventions
 

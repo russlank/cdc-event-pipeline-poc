@@ -1,6 +1,7 @@
 name: ci
 
-# Runs the same gates as .woodpecker.yml: ci/dotnet-gates.sh and ci/schema-compat.sh.
+# Runs the same gates as .woodpecker.yml: ci/dotnet-gates.sh, ci/integration-tests.sh, and
+# ci/schema-compat.sh.
 
 on:
   push:
@@ -23,15 +24,30 @@ jobs:
       - name: .NET gates
         run: bash ci/dotnet-gates.sh "${{ github.ref_name }}" "${{ github.server_url }}/${{ github.repository }}"
 
+  integration:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          global-json-file: src/global.json
+
+      - name: Integration tests
+        # Testcontainers starts Kafka, Schema Registry, and PostgreSQL on the runner's Docker.
+        run: bash ci/integration-tests.sh
+
   contracts:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7.0.1
 
       - name: Start Kafka and Schema Registry
-        # The compose file requires the variable; no SQL Server is started here.
+        # The compose file requires these variables; no SQL Server or PostgreSQL is started here.
         env:
           MSSQL_SA_PASSWORD: unused-in-this-job-1A!
+          POSTGRES_PASSWORD: unused-in-this-job
+          PAYQUERY_DB_PASSWORD: unused-in-this-job
         run: docker compose --progress quiet up -d --wait kafka schema-registry
 
       - name: Contract compatibility

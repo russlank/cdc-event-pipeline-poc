@@ -21,7 +21,7 @@ Run the stack locally and check that it works.
 
    ```sh
    cp .env.example .env
-   # edit .env and set a strong MSSQL_SA_PASSWORD
+   # edit .env: set a strong MSSQL_SA_PASSWORD and the two PostgreSQL passwords
    ```
 
 2. Start the stack and wait until the init jobs are done and every service
@@ -41,12 +41,18 @@ Run the stack locally and check that it works.
 
    Kafka UI is at <http://localhost:8080>.
 
-4. Build and test the .NET solution:
+4. Run the demo scenarios, then ask the Query API:
 
    ```sh
-   cd src
-   dotnet build ./CdcPay.slnx -c Release
-   dotnet test ./CdcPay.slnx -c Release --no-build
+   for s in scripts/scenarios/0*.sh; do bash "$s"; done
+   curl -s 'http://127.0.0.1:5103/tenants/1/employees/1003/salary-history'
+   ```
+
+5. Build and test the .NET solution:
+
+   ```sh
+   bash ci/dotnet-gates.sh          # restore, build, unit tests, format
+   bash ci/integration-tests.sh     # Kafka, Schema Registry, PostgreSQL in Testcontainers
    ```
 
 ## Outputs
@@ -58,5 +64,7 @@ Run the stack locally and check that it works.
 | Kafka Connect REST | <http://localhost:8083> |
 | Schema Registry | <http://localhost:8081> |
 | Kafka UI | <http://localhost:8080> |
+| PostgreSQL read model | `127.0.0.1:5432`, database `payhistory` (logins `payhistory`, `pay_query`) |
+| Pay Query API | <http://127.0.0.1:5103> |
 
 To start from scratch: `docker compose down` (the stack keeps no volumes).

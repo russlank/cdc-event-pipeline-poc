@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CdcPay.Common\CdcPay.Common.csproj" />
+    <ProjectReference Include="..\CdcPay.PayHistory\CdcPay.PayHistory.csproj" />
   </ItemGroup>
 
 </Project>

@@ -13,6 +13,23 @@ run_sql() {
     '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d HrCore -b -W' < "$1"
 }
 
+# sql_rows <query>: prints the rows a single-column query returns, one per line, no header.
+sql_rows() {
+  printf 'SET NOCOUNT ON;\n%s\n' "$1" | docker compose exec -T sqlserver bash -c \
+    '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -d HrCore -b -h -1 -W' \
+    | tr -d '\r' | sed '/^$/d'
+}
+
+# sql_value <query>: prints the first value of the first row a query returns.
+sql_value() {
+  sql_rows "$1" | sed -n '1p'
+}
+
+# api <path>: GETs a Query API path and prints the body; fails on a non-2xx status.
+api() {
+  curl -fsS "http://127.0.0.1:5103$1"
+}
+
 # events: prints every business event as "<key>\t<json>", decoded through the Schema Registry.
 events() {
   docker compose exec -T schema-registry kafka-avro-console-consumer \
@@ -39,6 +56,11 @@ wait_for() {
 # unique_ids: reads events on stdin, prints the number of distinct event ids.
 unique_ids() {
   grep -oE '"eventId":"[0-9a-f-]+"' | sort -u | wc -l | tr -d ' '
+}
+
+# iso_millis <epoch-ms>: prints the instant as ISO 8601 UTC with milliseconds.
+iso_millis() {
+  printf '%s.%03dZ' "$(date -u -d "@$(($1 / 1000))" +%Y-%m-%dT%H:%M:%S)" "$(($1 % 1000))"
 }
 
 pass() { printf 'PASS: %s\n' "$*"; }

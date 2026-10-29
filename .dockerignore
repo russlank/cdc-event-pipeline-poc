@@ -1,4 +1,5 @@
-# Build context: only src/ and contracts/ are copied into images.
+# Build context: only src/, contracts/, and db/readmodel/ (embedded by the projector) are
+# copied into images.
 **/bin/
 **/obj/
 **/.vs/
@@ -7,6 +8,7 @@
 .env
 docs/
 db/
+!db/readmodel/
 connect/
 monitoring/
 scripts/

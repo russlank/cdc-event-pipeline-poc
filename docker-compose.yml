@@ -194,6 +194,74 @@ services:
     mem_limit: 512m
     restart: unless-stopped
 
+  # Read model of the projector. Data lives in tmpfs, like the rest of the stack it is reset by
+  # `docker compose down`. The init script adds the Query API's read-only login.
+  postgres:
+    image: postgres:18.4-alpine
+    environment:
+      POSTGRES_USER: payhistory
+      POSTGRES_DB: payhistory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PAYQUERY_DB_PASSWORD: ${PAYQUERY_DB_PASSWORD:?set PAYQUERY_DB_PASSWORD in .env}
+    volumes:
+      - ./db/readmodel/init:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql
+    ports:
+      - "127.0.0.1:5432:5432"
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U payhistory -d payhistory"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  pay-history-projector:
+    build:
+      context: .
+      dockerfile: src/CdcPay.PayHistoryProjector/Dockerfile
+      args:
+        SOURCE_REVISION_ID: ${SOURCE_REVISION_ID:-}
+        SOURCE_BRANCH: ${SOURCE_BRANCH:-}
+        REPOSITORY_URL: ${REPOSITORY_URL:-}
+    image: cdc-pay/pay-history-projector:local
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      schemas-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__SchemaRegistryUrl: http://schema-registry:8081
+      ConnectionStrings__ReadModel: Host=postgres;Database=payhistory;Username=payhistory;Password=${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:5102:8080"
+    mem_limit: 512m
+    restart: unless-stopped
+
+  pay-query-api:
+    build:
+      context: .
+      dockerfile: src/CdcPay.PayQueryApi/Dockerfile
+      args:
+        SOURCE_REVISION_ID: ${SOURCE_REVISION_ID:-}
+        SOURCE_BRANCH: ${SOURCE_BRANCH:-}
+        REPOSITORY_URL: ${REPOSITORY_URL:-}
+    image: cdc-pay/pay-query-api:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Read-only login; ready once the projector has applied the schema.
+      ConnectionStrings__ReadModel: Host=postgres;Database=payhistory;Username=pay_query;Password=${PAYQUERY_DB_PASSWORD}
+    ports:
+      - "127.0.0.1:5103:8080"
+    mem_limit: 512m
+    restart: unless-stopped
+
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
     depends_on:

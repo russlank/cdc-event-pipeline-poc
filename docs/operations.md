@@ -65,17 +65,32 @@ Settings that matter:
 | `decimal.handling.mode=string` | amounts arrive as exact decimal strings |
 | `tombstones.on.delete=false` | deletes are one event with the before image |
 
-## Event Translator and Scenarios
+## Services and Scenarios
+
+Each .NET service serves `/health/live`, `/health/ready`, and
+`/system/component-identity`:
 
 ```sh
-curl -s http://127.0.0.1:5101/health/ready
-curl -s http://127.0.0.1:5101/system/component-identity
-bash scripts/scenarios/01-initial-snapshot.sh      # every seeded employee as EmployeeHired
+curl -s http://127.0.0.1:5101/health/ready                 # Event Translator
+curl -s http://127.0.0.1:5102/health/ready                 # Pay History Projector
+curl -s http://127.0.0.1:5103/health/ready                 # Pay Query API
+curl -s http://127.0.0.1:5103/system/component-identity
+```
+
+The projector is ready once it has applied the read-model schema and owns
+partitions; the API is ready once the schema exists.
+
+```sh
+bash scripts/scenarios/01-initial-snapshot.sh      # every seeded employee as EmployeeHired; read model matches HrCore
 bash scripts/scenarios/02-raise-next-month.sh      # SalaryChanged, not retroactive
+bash scripts/scenarios/03-retroactive-raise.sh     # retroactive SalaryChanged; validAt and knownAt answers
+bash scripts/scenarios/04-correction.sh            # SalaryCorrected; the earlier version stays in the history
 bash scripts/scenarios/05-hire-one-transaction.sh  # one EmployeeHired from three tables
 ```
 
-Each scenario runs its `.sql` file (safe to rerun) and checks the events.
+Each scenario runs its `.sql` file (safe to rerun) and checks the events and,
+from scenario 3 on, the Query API. Queries are described in
+[read-model.md](read-model.md).
 Business events decoded through the registry:
 
 ```sh
@@ -91,6 +106,17 @@ Dead letters with their headers:
 docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 \
   --topic hr.dlq --from-beginning --formatter-property print.headers=true
 ```
+
+## Read Model
+
+```sh
+docker compose exec postgres psql -U payhistory -d payhistory   -c "SELECT employee_id, pay_component, monthly_amount, valid_from, valid_to, recorded_from, recorded_to
+      FROM pay_history WHERE tenant_id = 1 AND employee_id = 1003 ORDER BY valid_from, recorded_from;"
+docker compose logs pay-history-projector | grep -E 'Applied|NoChange|Duplicate' | tail
+```
+
+The projector logs every event as `Applied`, `NoChange`, or `Duplicate`, with
+its type, id, and Kafka position; never an amount.
 
 ## Contracts
 

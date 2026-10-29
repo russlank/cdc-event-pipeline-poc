@@ -1,5 +1,5 @@
-# Woodpecker CI. Runs the same gates as .github/workflows/ci.yml: ci/dotnet-gates.sh and
-# ci/schema-compat.sh.
+# Woodpecker CI. Runs the same gates as .github/workflows/ci.yml: ci/dotnet-gates.sh,
+# ci/integration-tests.sh, and ci/schema-compat.sh.
 
 when:
   - event: [push, pull_request, manual]
@@ -29,6 +29,11 @@ services:
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
       SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: "1"
+  postgres:
+    image: postgres:18.4-alpine
+    environment:
+      # A throwaway CI database; the password only exists inside this pipeline.
+      POSTGRES_PASSWORD: ci-only
 
 steps:
   dotnet:
@@ -36,6 +41,16 @@ steps:
     image: mcr.microsoft.com/dotnet/sdk:10.0.402-noble
     commands:
       - bash ci/dotnet-gates.sh "$${CI_COMMIT_BRANCH}" "$${CI_REPO_URL}"
+
+  integration:
+    # No Docker daemon in the step: the tests use the services above instead of Testcontainers.
+    image: mcr.microsoft.com/dotnet/sdk:10.0.402-noble
+    environment:
+      CDCPAY_IT_KAFKA: kafka:9092
+      CDCPAY_IT_SCHEMA_REGISTRY: http://schema-registry:8081
+      CDCPAY_IT_POSTGRES: Host=postgres;Username=postgres;Password=ci-only;Database=postgres
+    commands:
+      - bash ci/integration-tests.sh
 
   contracts:
     # The script waits up to two minutes for the registry service.

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Scenario 1: initial snapshot of the seeded data.
-# Expected: every seeded employee appears as exactly one EmployeeHired (snapshot) event.
+# Expected: every seeded employee appears as exactly one EmployeeHired (snapshot) event, and the
+# Query API returns the salary in effect today of each seeded employee as HrCore has it.
 
 source "$(dirname "$0")/lib.sh"
 
@@ -15,3 +16,18 @@ count_hired() {
 
 wait_for 120 "$expected snapshot EmployeeHired events" count_hired
 pass "$hired distinct EmployeeHired snapshot events for $expected seeded employees"
+
+# Every salary row of a seeded employee in effect today, as "tenant employee amount".
+today=$(date -u +%Y-%m-%d)
+in_effect=$(sql_rows "SELECT CONCAT(TenantId, ' ', EmployeeId, ' ', MonthlyAmount) FROM dbo.Salary
+  WHERE EmployeeId % 1000 <= 20 AND EffectiveFrom <= '$today' AND (EffectiveTo IS NULL OR EffectiveTo > '$today');")
+
+read_model_matches() {
+  local tenant employee amount
+  while read -r tenant employee amount; do
+    api "/tenants/$tenant/employees/$employee/salary?validAt=$today" | grep -q "\"monthlyAmount\":$amount," || return 1
+  done <<< "$in_effect"
+}
+
+wait_for 120 "the Query API to return today's salary of every seeded employee" read_model_matches
+pass "the read model returns today's salary for all $(echo "$in_effect" | wc -l | tr -d ' ') salary rows in effect"
