@@ -1,0 +1,7 @@
+<Project>
+  <!-- Guard rails that need the final project state. -->
+  <Target Name="FailIfSharedPropsMissing" BeforeTargets="Build">
+    <Error Condition="'$(RepoBuildPropsImported)' != 'true'"
+           Text="$(MSBuildProjectName) did not import src/Directory.Build.props; move it under src/ or import the props explicitly." />
+  </Target>
+</Project>

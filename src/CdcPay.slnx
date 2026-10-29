@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="CdcPay.Common/CdcPay.Common.csproj" />
+  <Project Path="CdcPay.Contracts/CdcPay.Contracts.csproj" />
+  <Project Path="CdcPay.EventTranslator/CdcPay.EventTranslator.csproj" />
+  <Project Path="CdcPay.PayHistory/CdcPay.PayHistory.csproj" />
+  <Project Path="CdcPay.PayHistoryProjector/CdcPay.PayHistoryProjector.csproj" />
+  <Project Path="CdcPay.PayQueryApi/CdcPay.PayQueryApi.csproj" />
+  <Project Path="CdcPay.Translation/CdcPay.Translation.csproj" />
+  <Project Path="CdcPay.UnitTests/CdcPay.UnitTests.csproj" />
+</Solution>

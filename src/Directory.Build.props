@@ -1,0 +1,59 @@
+<Project>
+  <!--
+    Shared build settings for every project under src/.
+    Never set TargetFramework here; projects opt in with
+    <TargetFramework>$(AppTargetFramework)</TargetFramework>.
+  -->
+  <PropertyGroup>
+    <AppTargetFramework>net10.0</AppTargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <!-- Needed for IDE0005 at build time. XML docs are not required: nothing here is a
+         published package (CS1591 off). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSourceRevisionInInformationalVersion>true</IncludeSourceRevisionInInformationalVersion>
+    <IsPackable>false</IsPackable>
+
+    <Company>Russlan Kafri</Company>
+    <Authors>Russlan Kafri</Authors>
+    <Product>CDC Pay Events PoC</Product>
+    <Copyright>Copyright (c) 2026 Russlan Kafri</Copyright>
+
+    <!-- Restore-time vulnerability audit over transitive packages; high and critical
+         advisories fail the build, low and moderate stay warnings. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902</WarningsNotAsErrors>
+
+    <!-- Marker checked by Directory.Build.targets. -->
+    <RepoBuildPropsImported>true</RepoBuildPropsImported>
+  </PropertyGroup>
+
+  <!-- One version for every project; tags are v<version>. -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <VersionSuffix></VersionSuffix>
+    <AssemblyVersion>0.1.0</AssemblyVersion>
+    <FileVersion>0.1.0</FileVersion>
+  </PropertyGroup>
+
+  <!-- Build identity. The SDK fills SourceRevisionId from Git; CI passes
+       -p:SourceBranch=<branch> and -p:RepositoryUrl=<url>. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="SourceRevisionId" Value="$(SourceRevisionId)" Condition="'$(SourceRevisionId)' != ''" />
+    <AssemblyMetadata Include="SourceBranch" Value="$(SourceBranch)" Condition="'$(SourceBranch)' != ''" />
+    <AssemblyMetadata Include="RepositoryUrl" Value="$(RepositoryUrl)" Condition="'$(RepositoryUrl)' != ''" />
+  </ItemGroup>
+</Project>
