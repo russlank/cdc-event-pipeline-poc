@@ -3,6 +3,17 @@
 groups:
   - name: cdc-pay
     rules:
+      # A scrape target is down. For otel-collector this means every .NET metric is gone, so the
+      # alerts built on them (TranslatorTransactionsStuck) cannot fire either.
+      - alert: MetricsTargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Prometheus cannot scrape {{ $labels.job }} ({{ $labels.instance }})'
+          description: 'Its metrics are missing, and alerts that depend on them are blind. Check `docker compose ps` and `docker compose logs {{ $labels.job }}`.'
+
       # The connector or its task is not running, or Connect does not report it at all (stopped).
       - alert: ConnectorNotRunning
         expr: |

@@ -121,6 +121,7 @@ docker compose logs -f alert-sink
 
 | Alert | Fires when | First steps |
 |---|---|---|
+| `MetricsTargetDown` (critical) | for 1 minute Prometheus cannot scrape a target (`otel-collector`, `connect`, `kafka-exporter`, `alertmanager`) | `docker compose ps`, then the target's log. With `otel-collector` down every .NET metric is missing, so `TranslatorTransactionsStuck` cannot fire until it is back |
 | `ConnectorNotRunning` (critical) | for 1 minute the connector is not reported as running, or its task is not running | `curl -s localhost:8083/connectors/hrcore-cdc/status`; for a failed task read `trace`, then `curl -X POST localhost:8083/connectors/hrcore-cdc/tasks/0/restart`. After every Connect restart the task fails once with a `NullPointerException` in `buildEndTransactionValue` (Debezium 3.6.2, see the journal); the task restart fixes it |
 | `CdcEventsStalled` (critical) | Debezium has seen no change for 2 minutes, for 1 minute | the heartbeat changes the source every 10 s, so capture is broken: check SQL Server Agent and the CDC capture job (`EXEC sys.sp_cdc_help_jobs`) |
 | `ConsumerLagHigh` (warning) | a consumer group is more than 100 messages behind for 2 minutes | the service's log and `/health/ready`; is it running? |
