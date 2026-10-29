@@ -21,7 +21,7 @@ Run the stack locally and check that it works.
 
    ```sh
    cp .env.example .env
-   # edit .env: set a strong MSSQL_SA_PASSWORD and the two PostgreSQL passwords
+   # edit .env: set a strong MSSQL_SA_PASSWORD, the two PostgreSQL passwords, and GRAFANA_ADMIN_PASSWORD
    ```
 
 2. Start the stack and wait until the init jobs are done and every service
@@ -66,5 +66,8 @@ Run the stack locally and check that it works.
 | Kafka UI | <http://localhost:8080> |
 | PostgreSQL read model | `127.0.0.1:5432`, database `payhistory` (logins `payhistory`, `pay_query`) |
 | Pay Query API | <http://127.0.0.1:5103> |
+| Grafana (dashboard CDC Pay Pipeline) | <http://127.0.0.1:3000>, user `admin`, password from `.env` |
+| Prometheus (targets, alerts) | <http://127.0.0.1:9090> |
+| Alertmanager | <http://127.0.0.1:9093>; alerts also in `docker compose logs alert-sink` |
 
 To start from scratch: `docker compose down` (the stack keeps no volumes).

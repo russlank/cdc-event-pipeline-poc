@@ -98,6 +98,13 @@ transaction, and any row or `END` of a recently released transaction (it
 remembers the last 10 000), is discarded as a duplicate. A row that the
 released transaction never had is dead-lettered.
 
+## Trace Context
+
+A business event may carry a `traceparent` header (W3C trace context) of the
+translator's span that published it; the projector continues that trace. The
+header is optional: it is absent when the translator does not export traces,
+and consumers must not rely on it.
+
 ## Dead-Letter Reasons
 
 Each dead-lettered message keeps its original key and value. Headers

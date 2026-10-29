@@ -13,12 +13,14 @@ public sealed class ProjectorMetricsTests
     public void Projected_CountsAppliedDuplicateAndDeadLettered()
     {
         using ServiceProvider services = new ServiceCollection().AddMetrics().BuildServiceProvider();
-        ProjectorMetrics metrics = new(services.GetRequiredService<IMeterFactory>());
+        IMeterFactory meterFactory = services.GetRequiredService<IMeterFactory>();
+        ProjectorMetrics metrics = new(meterFactory);
         List<(string Instrument, long Value, string? Tag)> measurements = [];
         using MeterListener listener = new();
         listener.InstrumentPublished = (instrument, l) =>
         {
-            if (instrument.Meter.Name == ProjectorMetrics.MeterName)
+            // Only this test's meter: other tests create meters with the same name in parallel.
+            if (instrument.Meter.Name == ProjectorMetrics.MeterName && ReferenceEquals(instrument.Meter.Scope, meterFactory))
             {
                 l.EnableMeasurementEvents(instrument);
             }

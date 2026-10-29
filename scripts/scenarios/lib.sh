@@ -59,9 +59,10 @@ incremental_snapshot() {
   docker compose logs --since "$3" connect 2>&1 | grep -qE "$pattern"
 }
 
-# log_count <service> <pattern>: prints how many log lines of the service match the pattern.
+# log_count <service> <message-prefix>: prints how many log records of a .NET service (JSON
+# console) have a message that starts with the prefix, for example 'Duplicate '.
 log_count() {
-  docker compose logs --no-log-prefix "$1" 2>/dev/null | grep -cE "$2" || true
+  docker compose logs --no-log-prefix "$1" 2>/dev/null | grep -cF "\"Message\":\"$2" || true
 }
 
 # api <path>: GETs a Query API path and prints the body; fails on a non-2xx status.
@@ -70,9 +71,11 @@ api() {
 }
 
 # events: prints every business event as "<key>\t<json>", decoded through the Schema Registry.
+# Messages that are not Avro (scenario 7 sends one) are skipped; without that the consumer stops
+# at the first one, and which events it printed before depends on the partition order.
 events() {
   docker compose exec -T schema-registry kafka-avro-console-consumer \
-    --bootstrap-server kafka:9092 --topic hr.employee-pay.v1 --from-beginning \
+    --bootstrap-server kafka:9092 --topic hr.employee-pay.v1 --from-beginning --skip-message-on-error \
     --property schema.registry.url=http://localhost:8081 \
     --property print.key=true \
     --key-deserializer org.apache.kafka.common.serialization.StringDeserializer \

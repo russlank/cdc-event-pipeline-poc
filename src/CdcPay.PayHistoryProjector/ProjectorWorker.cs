@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CdcPay.Contracts.Events;
 using CdcPay.PayHistory;
 using CdcPay.PayHistory.Storage;
@@ -76,6 +77,7 @@ public sealed class ProjectorWorker(
     private async Task HandleAsync(ConsumeResult<byte[]?, byte[]> result, CancellationToken stoppingToken)
     {
         string position = result.TopicPartitionOffset.ToString();
+        using Activity? activity = ProjectorActivities.StartProcess(result.Topic, position, result.Message.Headers);
         PayEvent? payEvent;
         try
         {
@@ -86,6 +88,7 @@ public sealed class ProjectorWorker(
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             // The exception text may quote the message; only its type is recorded.
+            ProjectorActivities.SetOutcome(activity, ProjectorFailures.Undeserializable);
             await deadLetters.PublishAsync(
                 result, ProjectorFailures.Undeserializable, $"{exception.GetType().Name}: not a business event of the contract", stoppingToken);
             return;
@@ -93,18 +96,22 @@ public sealed class ProjectorWorker(
 
         if (payEvent is null)
         {
+            ProjectorActivities.SetOutcome(activity, ProjectorFailures.Undeserializable);
             await deadLetters.PublishAsync(result, ProjectorFailures.Undeserializable, "empty value", stoppingToken);
             return;
         }
 
+        ProjectorActivities.SetEvent(activity, payEvent.eventType, payEvent.eventId);
         try
         {
             ProjectionResult projected = await RetryTransientAsync("project", () => store.ProjectAsync(payEvent, stoppingToken), stoppingToken);
             metrics.Projected(projected);
+            ProjectorActivities.SetOutcome(activity, projected.ToString());
             ProjectorLogs.EventProjected(logger, projected, payEvent.eventType, payEvent.eventId, position);
         }
         catch (PayEventException exception)
         {
+            ProjectorActivities.SetOutcome(activity, ProjectorFailures.InvalidEvent);
             await deadLetters.PublishAsync(result, ProjectorFailures.InvalidEvent, exception.Message, stoppingToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -112,6 +119,7 @@ public sealed class ProjectorWorker(
             // Only the type: database errors can quote row values in their detail.
             Type errorType = exception.GetType();
             ProjectorLogs.ProjectionFailed(logger, position, errorType);
+            activity?.SetStatus(ActivityStatusCode.Error, errorType.Name);
             throw;
         }
     }

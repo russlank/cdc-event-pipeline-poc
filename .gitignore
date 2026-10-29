@@ -3,6 +3,7 @@
 *.env.local
 secrets/
 !secrets/README.md
+monitoring/alertmanager/slack-api-url
 
 # .NET
 bin/

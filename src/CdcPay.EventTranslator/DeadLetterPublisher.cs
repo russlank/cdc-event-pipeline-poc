@@ -8,7 +8,7 @@ namespace CdcPay.EventTranslator;
 /// Publishes failed messages to the dead-letter topic: original key and value bytes unchanged,
 /// error details in <c>dlq.*</c> headers (<see cref="DeadLetterHeaders"/>).
 /// </summary>
-public sealed class DeadLetterPublisher(IProducer<byte[]?, byte[]> producer, TimeProvider clock, ILogger<DeadLetterPublisher> logger)
+public sealed class DeadLetterPublisher(IProducer<byte[]?, byte[]> producer, TranslatorMetrics metrics, TimeProvider clock, ILogger<DeadLetterPublisher> logger)
 {
     public const string Component = "event-translator";
 
@@ -27,6 +27,7 @@ public sealed class DeadLetterPublisher(IProducer<byte[]?, byte[]> producer, Tim
             PayEventContract.DeadLetterTopic,
             new Message<byte[]?, byte[]> { Key = message.Key, Value = message.Value, Headers = headers },
             cancellationToken);
+        metrics.DeadLettered(reason);
         TranslatorLogs.DeadLettered(logger, message.Position.ToString(), reason, detail);
     }
 }

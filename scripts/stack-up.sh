@@ -11,7 +11,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 jobs=(db-init kafka-init connect-init schemas-init)
-services=(sqlserver kafka schema-registry connect kafka-ui postgres event-translator pay-history-projector pay-query-api)
+services=(sqlserver kafka schema-registry connect kafka-ui postgres event-translator pay-history-projector pay-query-api
+  otel-collector kafka-exporter prometheus alertmanager alert-sink grafana)
 
 # Build identity for the .NET images.
 SOURCE_REVISION_ID=$(git rev-parse HEAD 2>/dev/null || true)

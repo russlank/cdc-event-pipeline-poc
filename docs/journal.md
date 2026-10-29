@@ -11,6 +11,45 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: The Debezium task fails on every Connect restart
+
+- **Symptom:** after `docker compose stop connect` and `start` (and after the
+  Connect image was rebuilt), the connector is `RUNNING` but its task
+  `FAILED` within seconds: `NullPointerException: Cannot invoke
+  "java.time.Instant.toEpochMilli()" because "timestamp" is null` in
+  `AbstractTransactionStructMaker.buildEndTransactionValue`. Found by the new
+  `kafka_connect_task_status` metric; `ConnectorNotRunning` fired for it.
+- **Cause:** with `provide.transaction.metadata`, the stored offset holds the
+  transaction that was open when Connect stopped (`transaction_id` of the last
+  heartbeat). On restart, the first new transaction makes Debezium 3.6.2 emit
+  the END of the restored one, whose start time was not restored.
+- **Workaround:** restart the task (`curl -X POST
+  localhost:8083/connectors/hrcore-cdc/tasks/0/restart`); the second start
+  streams normally. The END of the interrupted transaction is never emitted,
+  so the translator abandons it after 60 s (`TranslatorTransactionsStuck`).
+  No fix found in the 3.6 release notes. Drill 1 (stop Connect, change data,
+  restart) has to decide on an upgrade or an automatic task restart.
+
+### 2026-10-29: Scenario 7 read only part of the business topic
+
+- **Symptom:** scenario 7 timed out waiting for the promotion of 2:2004 that
+  the translator had published.
+- **Cause:** `events` (Avro console consumer) stops at the first message it
+  cannot decode, and scenario 7 itself puts a non-Avro message on
+  `hr.employee-pay.v1`. Which events were printed before it depended on the
+  partition order; it had passed by chance (332 of 455 events were read).
+- **Fix:** `--skip-message-on-error` in `events`.
+
+### 2026-10-29: The open-transaction gauge is never 0
+
+- **Symptom:** a first `TranslatorTransactionsStuck` rule (open transactions
+  above 0 for 3 minutes) fired on an idle stack.
+- **Cause:** Debezium emits a transaction's END marker only when the next
+  transaction begins; the heartbeat starts one every 10 s, so the translator
+  always holds one open transaction.
+- **Fix:** the alert counts abandoned transactions
+  (`cdcpay.translator.transactions.abandoned`) instead.
+
 ### 2026-10-29: A registry 404 would have stalled the projector forever
 
 - **Symptom:** none at run time; the compiler reported an unreachable

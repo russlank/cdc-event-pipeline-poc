@@ -8,7 +8,7 @@ source "$(dirname "$0")/../scenarios/lib.sh"
 
 start=$(sql_value "SELECT CONVERT(varchar(27), SYSUTCDATETIME(), 126);")
 since=$(date -u -d '-5 seconds' +%Y-%m-%dT%H:%M:%SZ)
-duplicates_before=$(log_count pay-history-projector '^ *Duplicate ')
+duplicates_before=$(log_count pay-history-projector 'Duplicate ')
 echo "read model before: $(readmodel_checksum)"
 
 bash scripts/ops/backfill.sh Salary &
@@ -42,6 +42,6 @@ pass "raise (salary $salary_id) published while the backfill ran; the snapshot f
 wait_for 120 "the projector to catch up" group_caught_up cdcpay-pay-history-projector
 recorded=$(readmodel_sql "SELECT count(*) || ' ' || count(DISTINCT recorded_from) FROM pay_history WHERE recorded_from >= '${start}Z';")
 [ "$recorded" = "2 1" ] || fail "rows recorded since the backfill started: '$recorded' (count, instants); expected the raise's 2 rows at 1 instant"
-duplicates=$(( $(log_count pay-history-projector '^ *Duplicate ') - duplicates_before ))
+duplicates=$(( $(log_count pay-history-projector 'Duplicate ') - duplicates_before ))
 echo "read model after: $(readmodel_checksum); $duplicates backfill events were duplicates"
 pass "the backfill added no pay_history rows; only the concurrent raise did"

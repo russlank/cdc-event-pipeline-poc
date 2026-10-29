@@ -1,0 +1,27 @@
+# Alertmanager with Slack: every alert goes to the local webhook sink and to Slack.
+# Use it with ALERTMANAGER_CONFIG=alertmanager-slack.yml in .env, and put the Slack incoming
+# webhook URL, alone, in monitoring/alertmanager/slack-api-url (git-ignored).
+global:
+  slack_api_url_file: /etc/alertmanager/slack-api-url
+
+route:
+  receiver: alert-sink
+  group_by: [alertname]
+  group_wait: 10s
+  group_interval: 1m
+  repeat_interval: 1h
+  routes:
+    - receiver: alert-sink
+      continue: true
+    - receiver: slack
+
+receivers:
+  - name: alert-sink
+    webhook_configs:
+      - url: http://alert-sink:8080/alerts
+        send_resolved: true
+  - name: slack
+    slack_configs:
+      - send_resolved: true
+        title: '{{ .Status | toUpper }}: {{ .CommonLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ "\n" }}{{ end }}'

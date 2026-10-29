@@ -40,6 +40,7 @@ Details: [docs/getting-started.md](docs/getting-started.md).
 | [docs/read-model.md](docs/read-model.md) | bitemporal pay history, projection, Query API |
 | [docs/configuration.md](docs/configuration.md) | secrets, ports, service settings |
 | [docs/operations.md](docs/operations.md) | start, stop, inspect, reset |
+| [docs/monitoring.md](docs/monitoring.md) | metrics, dashboard, alerts |
 | [docs/testing.md](docs/testing.md) | test projects and gates |
 | [docs/journal.md](docs/journal.md) | what broke and how it was fixed |
 
@@ -73,11 +74,18 @@ newer one existed (for example Debezium 3.7.0 was one day old).
 |---|---|
 | SQL Server | `mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04` |
 | Kafka | `apache/kafka:4.3.2` |
-| Debezium Connect | `quay.io/debezium/connect:3.6.2.Final` (Kafka Connect 4.3.0) |
+| Debezium Connect | `quay.io/debezium/connect:3.6.2.Final` (Kafka Connect 4.3.0), plus the Prometheus JMX exporter agent 1.6.0 |
 | Schema Registry | `confluentinc/cp-schema-registry:8.3.2` |
 | Kafka UI | `ghcr.io/kafbat/kafka-ui:v1.5.0` |
 | PostgreSQL | `postgres:18.4-alpine` (18.6 was one day old) |
 | curl (init job) | `curlimages/curl:8.22.0` |
+| OpenTelemetry Collector | `otel/opentelemetry-collector:0.162.0` (0.163 and 0.164 were under two weeks old) |
+| Prometheus | `prom/prometheus:v3.15.0` |
+| Alertmanager | `prom/alertmanager:v0.34.1` |
+| Grafana | `grafana/grafana:13.2.3` |
+| kafka-exporter | `danielqsj/kafka-exporter:v1.10.0` |
+| Alert sink | `python:3.13.16-alpine3.23` |
+| OpenTelemetry .NET | 1.19.1 (instrumentation 1.19.0); 1.20.1 was under two weeks old |
 | .NET SDK and runtime | 10.0.402; images `mcr.microsoft.com/dotnet/sdk:10.0.402-noble`, `aspnet:10.0.14-noble` |
 | avrogen | `Apache.Avro.Tools` 1.12.2 (`dotnet-tools.json`) |
 | NuGet packages | `src/Directory.Packages.props` |

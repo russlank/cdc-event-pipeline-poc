@@ -1,0 +1,10 @@
+# Dashboards come from monitoring/grafana/dashboards in Git. Edits in the UI cannot be saved;
+# export the JSON and commit it instead.
+apiVersion: 1
+providers:
+  - name: cdc-pay
+    folder: CDC Pay
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards

@@ -10,6 +10,13 @@ public sealed class TranslatorStatus
         get => Volatile.Read(ref field);
         set => Volatile.Write(ref field, value);
     }
+
+    /// <summary>Source transactions seen but not complete yet (metric <c>cdcpay.translator.transactions.open</c>).</summary>
+    public int OpenTransactions
+    {
+        get => Volatile.Read(ref field);
+        set => Volatile.Write(ref field, value);
+    }
 }
 
 /// <summary>Ready once the consumer owns partitions; before that the translator is not doing its job.</summary>

@@ -25,6 +25,7 @@ public static class TranslatorServiceExtensions
 
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<TranslatorStatus>();
+        builder.Services.AddSingleton<TranslatorMetrics>();
         builder.Services.AddSingleton<ISchemaRegistryClient>(services =>
             new CachedSchemaRegistryClient(new SchemaRegistryConfig { Url = services.GetRequiredService<IOptions<KafkaOptions>>().Value.SchemaRegistryUrl }));
 

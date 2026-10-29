@@ -1,0 +1,56 @@
+# Alert rules. Labels and annotations name only connectors, tasks, topics, consumer groups, and
+# numbers, never row content.
+groups:
+  - name: cdc-pay
+    rules:
+      # The connector or its task is not running, or Connect does not report it at all (stopped).
+      - alert: ConnectorNotRunning
+        expr: |
+          absent(kafka_connect_connector_status{connector="hrcore-cdc", status="running"})
+          or max by (connector, task, status) (kafka_connect_task_status{connector="hrcore-cdc", status!="running"}) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Connector hrcore-cdc is not running{{ if $labels.task }} (task {{ $labels.task }} {{ $labels.status }}){{ end }}'
+          description: 'No change from SQL Server reaches Kafka. Check `curl -s localhost:8083/connectors/hrcore-cdc/status`; restart a failed task with `curl -X POST localhost:8083/connectors/hrcore-cdc/tasks/0/restart`.'
+
+      # The Debezium heartbeat changes dbo.DebeziumHeartbeat every 10 s, so while the connector
+      # runs the source always changes: no event for 2 minutes means capture is broken (for
+      # example SQL Server Agent is stopped).
+      - alert: CdcEventsStalled
+        expr: max(debezium_metrics_millisecondssincelastevent{context="streaming"}) / 1000 > 120
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'No change event from SQL Server for {{ $value | humanizeDuration }}'
+          description: 'The connector runs but sees no changes, not even the heartbeat. Check that SQL Server Agent runs and the CDC capture job is started.'
+
+      - alert: ConsumerLagHigh
+        expr: sum by (consumergroup) (kafka_consumergroup_lag) > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Consumer group {{ $labels.consumergroup }} is {{ $value }} messages behind'
+          description: 'The group does not keep up or has stopped. Check its service log and `/health/ready`.'
+
+      - alert: DlqNotEmpty
+        expr: sum(increase(kafka_topic_partition_current_offset{topic="hr.dlq"}[5m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value | printf "%.0f" }} messages dead-lettered in the last 5 minutes'
+          description: 'Read the dlq.reason and dlq.error headers of the new messages on hr.dlq (docs/operations.md).'
+
+      # The translator gives up on a source transaction whose END marker or rows do not arrive
+      # within 60 s. (The open-transaction gauge cannot show this: it is normally 1, because
+      # Debezium emits a transaction's END only when the next one begins.)
+      - alert: TranslatorTransactionsStuck
+        expr: sum(increase(cdcpay_translator_transactions_abandoned_total[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: '{{ $value | printf "%.0f" }} source transactions abandoned as incomplete in the last 10 minutes'
+          description: 'Their rows went to hr.dlq as IncompleteTransaction. Check the translator log for Abandoned lines and the connector for a restart without END markers.'

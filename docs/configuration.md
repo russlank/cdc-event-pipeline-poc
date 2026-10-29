@@ -18,6 +18,8 @@ lists them. Compose passes them to the containers that need them.
 | `MSSQL_SA_PASSWORD` | `sqlserver`, `db-init`, `connect` | SQL Server password policy: at least 8 characters with upper, lower, digit, and symbol |
 | `POSTGRES_PASSWORD` | `postgres`, `pay-history-projector` | the read model's owner login `payhistory` |
 | `PAYQUERY_DB_PASSWORD` | `postgres`, `pay-query-api` | the read-only login `pay_query`, created by `db/readmodel/init/create-query-role.sh` |
+| `GRAFANA_ADMIN_PASSWORD` | `grafana` | login `admin` |
+| `ALERTMANAGER_CONFIG` | `alertmanager` | not a secret: `alertmanager.yml` (default) or `alertmanager-slack.yml`; the Slack webhook URL itself goes in `monitoring/alertmanager/slack-api-url` (git-ignored) |
 
 The PostgreSQL passwords go into connection strings, so they must not contain
 `;`.
@@ -41,12 +43,27 @@ All ports bind to `127.0.0.1`.
 | 5101 | Event Translator (health, identity) |
 | 5102 | Pay History Projector (health, identity) |
 | 5103 | Pay Query API |
+| 8889 | OpenTelemetry Collector: metrics of the .NET services (`/metrics`) |
+| 9090 | Prometheus |
+| 9093 | Alertmanager |
+| 3000 | Grafana |
 
 ## Service Settings
 
 The .NET services read standard ASP.NET Core configuration (`appsettings.json`,
 then environment variables with `__` as the section separator). Required
 settings are validated at startup.
+
+Telemetry and logging, the same for every service (compose sets them through
+`x-dotnet-telemetry`):
+
+| Setting | Compose value | Notes |
+|---|---|---|
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4317` | unset: no metric or trace export |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `10000` | milliseconds between metric pushes |
+| `Logging:Console:FormatterName` | `json` | one JSON record per line; default is the plain console format |
+| `Logging:Console:FormatterOptions:IncludeScopes` | `true` | adds `TraceId` and `SpanId` while a span is active |
+| `Logging:Console:FormatterOptions:UseUtcTimestamp`, `TimestampFormat` | `true`, `yyyy-MM-ddTHH:mm:ss.fffZ` | |
 
 ### Event Translator
 

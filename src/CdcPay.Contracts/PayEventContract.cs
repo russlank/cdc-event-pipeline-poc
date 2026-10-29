@@ -18,6 +18,12 @@ public static class PayEventContract
     /// <summary>Value of <c>payComponent</c> (contract v2) when the source row has none.</summary>
     public const string DefaultPayComponent = "Base";
 
+    /// <summary>
+    /// Optional header of a business event: the W3C trace context of the span that published it,
+    /// so a consumer can continue the trace.
+    /// </summary>
+    public const string TraceParentHeader = "traceparent";
+
     /// <summary>Message key: per-employee ordering.</summary>
     public static string Key(int tenantId, int employeeId) => $"{tenantId}:{employeeId}";
 }

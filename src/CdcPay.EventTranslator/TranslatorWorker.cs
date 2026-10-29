@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CdcPay.Contracts;
 using CdcPay.Contracts.Events;
 using CdcPay.Translation.Assembly;
@@ -21,6 +22,7 @@ public sealed class TranslatorWorker(
     IProducer<string, PayEvent> eventProducer,
     DeadLetterPublisher deadLetters,
     TranslatorStatus status,
+    TranslatorMetrics metrics,
     TimeProvider clock,
     ILogger<TranslatorWorker> logger) : BackgroundService
 {
@@ -70,6 +72,8 @@ public sealed class TranslatorWorker(
                         _offsets.Complete(position);
                     }
                 }
+
+                status.OpenTransactions = _assembler.OpenTransactionCount;
 
                 if (clock.GetUtcNow() >= nextCommit)
                 {
@@ -142,6 +146,7 @@ public sealed class TranslatorWorker(
         {
             // Logged even without rows, so an abandoned transaction is never silent.
             TranslatorLogs.TransactionAbandoned(logger, gaveUp.TransactionId, gaveUp.Rows.Count, gaveUp.Detail);
+            metrics.Abandoned();
         }
 
         IReadOnlyList<TranslationOutcome> outcomes = output switch
@@ -158,13 +163,19 @@ public sealed class TranslatorWorker(
             switch (outcome)
             {
                 case EventOutcome published:
-                    _ = await eventProducer.ProduceAsync(
-                        PayEventContract.Topic,
-                        new Message<string, PayEvent> { Key = published.Key, Value = published.Event },
-                        cancellationToken);
-                    TranslatorLogs.EventPublished(logger, published.Event.eventType, published.Event.eventId);
+                    using (Activity? activity = TranslatorActivities.StartPublish(published.Event.eventType, published.Event.eventId))
+                    {
+                        _ = await eventProducer.ProduceAsync(
+                            PayEventContract.Topic,
+                            new Message<string, PayEvent> { Key = published.Key, Value = published.Event, Headers = TranslatorActivities.TraceHeaders(activity) },
+                            cancellationToken);
+                        metrics.Produced(published.Event.eventType, clock.GetUtcNow() - new DateTimeOffset(DateTime.SpecifyKind(published.Event.recordedAt, DateTimeKind.Utc)));
+                        TranslatorLogs.EventPublished(logger, published.Event.eventType, published.Event.eventId);
+                    }
+
                     break;
                 case IgnoredOutcome ignored:
+                    metrics.Ignored(ignored.Reason, ignored.Rows.Count);
                     TranslatorLogs.RowsIgnored(logger, ignored.Rows.Count, ignored.Reason);
                     break;
                 case DeadLetterOutcome failed:

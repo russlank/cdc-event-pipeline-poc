@@ -16,6 +16,14 @@
     <PackageVersion Include="Confluent.SchemaRegistry.Serdes.Avro" Version="2.16.0" />
   </ItemGroup>
 
+  <!-- Telemetry: metrics and traces pushed over OTLP to the collector. -->
+  <ItemGroup>
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.19.1" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.19.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.19.0" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.19.0" />
+  </ItemGroup>
+
   <!-- Read model (PostgreSQL). -->
   <ItemGroup>
     <PackageVersion Include="Npgsql" Version="10.0.3" />

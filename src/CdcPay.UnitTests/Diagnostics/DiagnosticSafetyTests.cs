@@ -159,7 +159,7 @@ public sealed class DiagnosticSafetyTests
             entry => Assert.True(IsBounded(entry.Parameter), $"{entry.Method} logs {entry.Parameter.Name} ({entry.Parameter.ParameterType.Name}), which could carry row content"));
     }
 
-    private static bool IsBounded(ParameterInfo parameter)
+    internal static bool IsBounded(ParameterInfo parameter)
     {
         Type type = Nullable.GetUnderlyingType(parameter.ParameterType) ?? parameter.ParameterType;
         return type == typeof(ILogger)

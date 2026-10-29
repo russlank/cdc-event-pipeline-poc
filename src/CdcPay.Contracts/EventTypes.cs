@@ -8,4 +8,7 @@ public static class EventTypes
     public const string SalaryCorrected = nameof(SalaryCorrected);
     public const string PositionChanged = nameof(PositionChanged);
     public const string EmployeeTerminated = nameof(EmployeeTerminated);
+
+    /// <summary>Every event type: the values the <c>event_type</c> metric tag can take.</summary>
+    public static IReadOnlyList<string> All { get; } = [EmployeeHired, SalaryChanged, SalaryCorrected, PositionChanged, EmployeeTerminated];
 }

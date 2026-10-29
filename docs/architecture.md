@@ -49,13 +49,21 @@ flowchart LR
 | Event Translator | .NET 10 worker | `src/CdcPay.EventTranslator`, `src/CdcPay.Translation` |
 | Pay History Projector | .NET 10 worker | `src/CdcPay.PayHistoryProjector`, `src/CdcPay.PayHistory` |
 | Pay Query API | ASP.NET Core minimal API | `src/CdcPay.PayQueryApi` |
-| Shared host wiring | identity, health, operator endpoints | `src/CdcPay.Common` |
+| Shared host wiring | identity, telemetry, health, operator endpoints | `src/CdcPay.Common` |
+| Monitoring | OpenTelemetry Collector, Prometheus, Grafana, Alertmanager, kafka-exporter, alert sink | `monitoring/`, [monitoring.md](monitoring.md) |
 
 Every .NET host serves `/health/live` (process only), `/health/ready`
 (dependencies), and `/system/component-identity` (component, version, commit,
 branch), and logs one identity line at startup. The hosts run in compose from
 multi-stage images as a non-root user; the build identity is passed as build
 arguments by `scripts/stack-up.sh`.
+
+Every host also sets up OpenTelemetry: its own meter and activity source
+(`CdcPay.*`), ASP.NET Core and runtime metrics, and request traces without
+probes. With `OTEL_EXPORTER_OTLP_ENDPOINT` set (compose sets it), metrics and
+traces are pushed to the OpenTelemetry Collector, which serves the metrics to
+Prometheus; Connect and Kafka are scraped directly. See
+[monitoring.md](monitoring.md).
 
 ## Event Translator
 

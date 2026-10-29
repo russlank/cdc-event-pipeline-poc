@@ -1,0 +1,33 @@
+# OpenTelemetry Collector: receives OTLP metrics and traces from the .NET services. Metrics are
+# served for Prometheus on :8889/metrics; traces have no backend here and are only counted in
+# the collector's log (debug exporter, basic verbosity).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 100
+  batch: {}
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    # A series a service stopped reporting (for example after a restart) disappears after this.
+    metric_expiration: 5m
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheus]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]

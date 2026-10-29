@@ -25,11 +25,22 @@ reports a failure when a job exits, even successfully; use the script.
 On Windows Git Bash, run `export MSYS_NO_PATHCONV=1` first, or Git Bash
 rewrites container paths such as `/opt/kafka/bin/...` into Windows paths.
 
+## Monitoring
+
+Dashboard, metrics, alert rules, and what to do when an alert fires:
+[monitoring.md](monitoring.md).
+
+```sh
+docker compose logs -f alert-sink     # every alert Alertmanager sends, firing and resolved
+curl -s localhost:9090/api/v1/alerts  # alerts as Prometheus evaluates them
+```
+
 ## Inspect
 
 ```sh
 docker compose ps
 docker compose logs -f connect
+docker compose logs --no-log-prefix event-translator | grep '"Message":"Dead-lettered'   # .NET logs are JSON lines
 curl -s http://localhost:8083/connectors?expand=status
 docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
 docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \

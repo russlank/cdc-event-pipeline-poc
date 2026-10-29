@@ -4,6 +4,17 @@
 
 name: cdc-pay
 
+
+# Shared by the .NET services: JSON console logs with trace ids, and metrics and traces pushed
+# over OTLP to the collector every 10 s.
+x-dotnet-telemetry: &dotnet-telemetry
+  Logging__Console__FormatterName: json
+  Logging__Console__FormatterOptions__IncludeScopes: "true"
+  Logging__Console__FormatterOptions__UseUtcTimestamp: "true"
+  Logging__Console__FormatterOptions__TimestampFormat: "yyyy-MM-ddTHH:mm:ss.fffZ"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_METRIC_EXPORT_INTERVAL: "10000"
+
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04
@@ -115,8 +126,11 @@ services:
       retries: 12
       start_period: 20s
 
+  # Debezium Connect plus the Prometheus JMX exporter agent (connect/Dockerfile), on :9404.
   connect:
-    image: quay.io/debezium/connect:3.6.2.Final
+    build:
+      context: ./connect
+    image: cdc-pay/connect:local
     depends_on:
       kafka:
         condition: service_healthy
@@ -187,6 +201,7 @@ services:
       schemas-init:
         condition: service_completed_successfully
     environment:
+      <<: *dotnet-telemetry
       Kafka__BootstrapServers: kafka:9092
       Kafka__SchemaRegistryUrl: http://schema-registry:8081
     ports:
@@ -234,6 +249,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      <<: *dotnet-telemetry
       Kafka__BootstrapServers: kafka:9092
       Kafka__SchemaRegistryUrl: http://schema-registry:8081
       ConnectionStrings__ReadModel: Host=postgres;Database=payhistory;Username=payhistory;Password=${POSTGRES_PASSWORD}
@@ -255,6 +271,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      <<: *dotnet-telemetry
       # Read-only login; ready once the projector has applied the schema.
       ConnectionStrings__ReadModel: Host=postgres;Database=payhistory;Username=pay_query;Password=${PAYQUERY_DB_PASSWORD}
     ports:
@@ -286,3 +303,111 @@ services:
       timeout: 5s
       retries: 12
       start_period: 30s
+
+  # --- Monitoring: metrics, dashboard, alerts. ---
+
+  # Receives OTLP from the .NET services and serves their metrics on :8889/metrics.
+  otel-collector:
+    image: otel/opentelemetry-collector:0.162.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./monitoring/otel-collector/config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "127.0.0.1:8889:8889"
+    mem_limit: 192m
+    restart: unless-stopped
+
+  # Consumer-group lag and topic offsets (the DLQ count is the offset growth of hr.dlq).
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+    command:
+      - --kafka.server=kafka:9092
+      - --topic.filter=^(hr|cdc)\..*
+      - --group.filter=^cdcpay-.*
+    mem_limit: 64m
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=2d
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+    tmpfs:
+      - /prometheus:uid=65534,gid=65534
+    ports:
+      - "127.0.0.1:9090:9090"
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9090/-/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  # Routes alerts to the webhook sink (and to Slack with ALERTMANAGER_CONFIG=alertmanager-slack.yml).
+  alertmanager:
+    image: prom/alertmanager:v0.34.1
+    command:
+      - --config.file=/etc/alertmanager/${ALERTMANAGER_CONFIG:-alertmanager.yml}
+      - --storage.path=/alertmanager
+    volumes:
+      - ./monitoring/alertmanager:/etc/alertmanager:ro
+    tmpfs:
+      - /alertmanager:uid=65534,gid=65534
+    ports:
+      - "127.0.0.1:9093:9093"
+    mem_limit: 96m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9093/-/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  # Prints every alert Alertmanager sends: `docker compose logs alert-sink`.
+  alert-sink:
+    image: python:3.13.16-alpine3.23
+    command: ["python", "-u", "/sink/sink.py"]
+    volumes:
+      - ./monitoring/alert-sink:/sink:ro
+    mem_limit: 48m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/cdc-pay-pipeline.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
