@@ -17,7 +17,7 @@ open-ended:
 | Axis | Columns | Meaning | Source |
 |---|---|---|---|
 | Valid time | `valid_from`, `valid_to` (dates) | when the amount applies | the event's `effectiveFrom`, `effectiveTo` |
-| Recorded time | `recorded_from`, `recorded_to` (UTC instants) | when the pipeline believed it | the event's `recordedAt` only |
+| Recorded time | `recorded_from`, `recorded_to` (UTC instants) | when the read model learned it | the event's `recordedAt`, never earlier than the version it replaces |
 
 A new fact never overwrites a row. It closes the rows it replaces
 (`recorded_to` is set) and inserts what is now known. The projector never
@@ -71,6 +71,22 @@ Two rules keep recorded time consistent:
   recorded period must not run backwards.
 - A row that is replaced at the same instant it was recorded was never
   visible on its own, so it is deleted instead of closed.
+
+### What `recordedFrom` and `knownAt` Mean
+
+`recordedFrom` is the instant the read model learned the fact, and it is
+never earlier than the `recordedFrom` of the version the fact replaces. It is
+still derived from the events, never from the projector's clock. Usually it
+equals the source commit time. It is later when the version being replaced
+was itself recorded later: a snapshot row carries the time the snapshot read
+it, so a change that committed while the snapshot ran is recorded at that
+read time, not at its own commit.
+
+So `knownAt` asks what the read model knew at that instant, not when the
+source database committed the change. Between a change's source commit and
+the snapshot read time, `knownAt` still returns the earlier version. To ask
+what the source held at a given moment, use the event's `recordedAt` on
+`hr.employee-pay.v1`.
 
 The merge is a pure function (`src/CdcPay.PayHistory/PayHistoryMerge.cs`) with
 unit tests for each case. The store only runs its plan.
