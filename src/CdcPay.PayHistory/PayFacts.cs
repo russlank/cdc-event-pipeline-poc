@@ -66,7 +66,7 @@ public static class PayFacts
             (EventTypes.EmployeeTerminated, EmployeeTerminatedPayload terminated) =>
                 new TerminationFact(payEvent.tenantId, payEvent.employeeId, recordedAt, payEvent.eventId, Date(terminated.terminationDate).AddDays(1)),
             (EventTypes.PositionChanged, PositionChangedPayload) => null,
-            _ => throw new PayEventException($"event type {payEvent.eventType} does not match payload {payEvent.payload?.GetType().Name ?? "null"}"),
+            _ => throw new PayEventException($"event type {DiagnosticValues.Code(payEvent.eventType)} does not match payload {payEvent.payload?.GetType().Name ?? "null"}"),
         };
     }
 

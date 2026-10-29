@@ -18,7 +18,7 @@ public sealed record IgnoredOutcome(string Reason, IReadOnlyList<RawChange> Rows
 
 /// <summary>
 /// Rows that cannot be translated; each goes to the dead-letter topic unchanged.
-/// <see cref="Reason"/> is one of <see cref="DeadLetterReasons"/>; <see cref="Detail"/> never contains row values.
+/// <see cref="Reason"/> is one of <see cref="DeadLetterReasons"/>; <see cref="Detail"/> names codes, never row content (<see cref="DiagnosticValues"/>).
 /// </summary>
 public sealed record DeadLetterOutcome(string Reason, string Detail, IReadOnlyList<RawChange> Rows) : TranslationOutcome(Rows);
 

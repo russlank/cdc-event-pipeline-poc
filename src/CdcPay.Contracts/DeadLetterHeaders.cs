@@ -17,7 +17,7 @@ public static class DeadLetterHeaders
     public const string SourceOffset = "dlq.source.offset";
     public const string Timestamp = "dlq.timestamp";
 
-    /// <summary>The headers in order; <c>error</c> must be a description that never quotes the message content.</summary>
+    /// <summary>The headers in order; <c>error</c> may name codes, never row content (<see cref="DiagnosticValues"/>).</summary>
     public static IReadOnlyList<KeyValuePair<string, byte[]>> Create(
         string reason, string error, string component, string sourceTopic, int sourcePartition, long sourceOffset, DateTimeOffset timestamp) =>
     [

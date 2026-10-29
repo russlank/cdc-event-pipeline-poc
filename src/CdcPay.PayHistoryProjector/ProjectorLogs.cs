@@ -4,7 +4,7 @@ namespace CdcPay.PayHistoryProjector;
 
 /// <summary>
 /// Log messages of the projector. Event ids 3000-3099. Values are bounded: event types, event
-/// ids, Kafka positions, and counts; never amounts or other pay values.
+/// ids, Kafka positions, and counts; never row content (<c>CdcPay.Contracts.DiagnosticValues</c>).
 /// </summary>
 internal static partial class ProjectorLogs
 {

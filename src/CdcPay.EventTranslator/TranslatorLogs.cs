@@ -2,7 +2,7 @@ namespace CdcPay.EventTranslator;
 
 /// <summary>
 /// Log messages of the translator. Event ids 2000-2099. Values are bounded: event types, reason
-/// codes, Kafka positions, and counts; never names, amounts, or other row values.
+/// codes, Kafka positions, and counts; never row content (<c>CdcPay.Contracts.DiagnosticValues</c>).
 /// </summary>
 internal static partial class TranslatorLogs
 {

@@ -104,8 +104,19 @@ Each dead-lettered message keeps its original key and value. Headers
 (`CdcPay.Contracts.DeadLetterHeaders`): `dlq.reason`, `dlq.error`,
 `dlq.component` (`event-translator` or `pay-history-projector`),
 `dlq.source.topic`, `dlq.source.partition`, `dlq.source.offset`,
-`dlq.timestamp`. `dlq.error` never quotes names or amounts; it may name a
-rejected code, such as an unsupported currency.
+`dlq.timestamp`.
+
+`dlq.error` and every log message may name values from closed code domains:
+currency, reason, operation, table, event type. They never contain row
+content: amounts, dates, names, titles, or free text. A rejected code is
+outside its domain and could be anything, so it is named only when it has the
+shape of a code (a letter, then at most 31 letters, digits, or underscores;
+`CdcPay.Contracts.DiagnosticValues.Code`). Otherwise the text says
+`(not a code)`: `Salary.Currency 'GBP' is not supported`, but
+`Salary.Reason (not a code) is not one of Hire, Raise, Promotion, Correction`.
+`DiagnosticSafetyTests` enforces the rule: every dead-letter error is built
+from rows full of recognisable content, and log messages may take only
+bounded parameters (counts, ids, positions, codes, types).
 
 From the translator (raw CDC topics):
 

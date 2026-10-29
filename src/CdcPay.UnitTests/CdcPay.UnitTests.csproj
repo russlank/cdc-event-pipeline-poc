@@ -19,8 +19,9 @@
   <ItemGroup>
     <ProjectReference Include="..\CdcPay.Common\CdcPay.Common.csproj" />
     <ProjectReference Include="..\CdcPay.PayQueryApi\CdcPay.PayQueryApi.csproj" />
-    <!-- Aliased: the projector also has a top-level Program, which would clash with the API's. -->
+    <!-- Aliased: the projector and the translator also have a top-level Program, which would clash with the API's. -->
     <ProjectReference Include="..\CdcPay.PayHistoryProjector\CdcPay.PayHistoryProjector.csproj" Aliases="projector" />
+    <ProjectReference Include="..\CdcPay.EventTranslator\CdcPay.EventTranslator.csproj" Aliases="translator" />
     <ProjectReference Include="..\CdcPay.Translation\CdcPay.Translation.csproj" />
   </ItemGroup>
 

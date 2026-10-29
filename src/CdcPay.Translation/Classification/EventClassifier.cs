@@ -326,8 +326,8 @@ public sealed class EventClassifier
 
     private string? Invalid(RawChange change) => change.After switch
     {
-        SalaryRow s when !SalaryReasons.Contains(s.Reason) => $"Salary.Reason '{s.Reason}' is not one of Hire, Raise, Promotion, Correction",
-        SalaryRow s when !_currencies.Contains(s.Currency) => $"Salary.Currency '{s.Currency}' is not supported",
+        SalaryRow s when !SalaryReasons.Contains(s.Reason) => $"Salary.Reason {DiagnosticValues.Code(s.Reason)} is not one of Hire, Raise, Promotion, Correction",
+        SalaryRow s when !_currencies.Contains(s.Currency) => $"Salary.Currency {DiagnosticValues.Code(s.Currency)} is not supported",
         SalaryRow s when s.MonthlyAmount <= 0 => "Salary.MonthlyAmount must be positive",
         SalaryRow s when s.EffectiveTo <= s.EffectiveFrom => "Salary.EffectiveTo must be after EffectiveFrom",
         PositionRow p when p.Level < 1 => "Position.Level must be at least 1",
