@@ -21,6 +21,10 @@ public sealed class ProjectorOptions
     [Required]
     public string Topic { get; set; } = PayEventContract.Topic;
 
+    /// <summary>Where messages that are not usable business events go.</summary>
+    [Required]
+    public string DeadLetterTopic { get; set; } = PayEventContract.DeadLetterTopic;
+
     /// <summary>How often offsets of applied events are committed.</summary>
     public TimeSpan CommitInterval { get; set; } = TimeSpan.FromSeconds(1);
 

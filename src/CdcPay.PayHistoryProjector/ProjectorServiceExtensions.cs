@@ -1,5 +1,6 @@
 using CdcPay.Common.Hosting;
 using CdcPay.PayHistory.Storage;
+using Confluent.Kafka;
 using Confluent.SchemaRegistry;
 using Microsoft.Extensions.Options;
 using Npgsql;
@@ -30,6 +31,19 @@ public static class ProjectorServiceExtensions
         builder.Services.AddSingleton<ProjectorStatus>();
         builder.Services.AddSingleton<ISchemaRegistryClient>(services =>
             new CachedSchemaRegistryClient(new SchemaRegistryConfig { Url = services.GetRequiredService<IOptions<ProjectorOptions>>().Value.SchemaRegistryUrl }));
+        builder.Services.AddSingleton(services =>
+        {
+            ProjectorOptions projector = services.GetRequiredService<IOptions<ProjectorOptions>>().Value;
+            return new ProducerBuilder<byte[]?, byte[]>(new ProducerConfig
+            {
+                BootstrapServers = projector.BootstrapServers,
+                ClientId = $"{projector.ConsumerGroup}-dlq",
+                EnableIdempotence = true,
+                Acks = Acks.All,
+            }).Build();
+        });
+        builder.Services.AddSingleton<ProjectorMetrics>();
+        builder.Services.AddSingleton<ProjectorDeadLetters>();
         builder.Services.AddHostedService<ProjectorWorker>();
 
         builder.AddServiceDefaults(typeof(ProjectorWorker).Assembly)

@@ -25,6 +25,45 @@ sql_value() {
   sql_rows "$1" | sed -n '1p'
 }
 
+# readmodel_sql <sql>: runs SQL in the read model as its owner; prints rows unaligned, no header.
+readmodel_sql() {
+  printf '%s\n' "$1" | docker compose exec -T postgres psql -U payhistory -d payhistory -v ON_ERROR_STOP=1 -q -tA
+}
+
+# readmodel_checksum: prints "<events> events, <rows> rows, <md5>" (scripts/checks/readmodel-checksum.sql).
+readmodel_checksum() {
+  readmodel_sql "$(cat scripts/checks/readmodel-checksum.sql)"
+}
+
+# kafka_groups <args...>: runs kafka-consumer-groups.sh against the broker.
+kafka_groups() {
+  docker compose exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 "$@"
+}
+
+# group_caught_up <group>: succeeds when the group has committed the end of every partition it reads.
+group_caught_up() {
+  local rows
+  rows=$(kafka_groups --describe --group "$1" 2>/dev/null | awk -v g="$1" '$1 == g')
+  [ -n "$rows" ] && echo "$rows" | awk '{ if (!($6 == "0" || $5 == "0")) exit 1 }'
+}
+
+# incremental_snapshot <started|finished> <table> <since>: succeeds when Connect has logged the start
+# or the end of an incremental snapshot of dbo.<table> since <since>, an ISO 8601 time with a zone
+# (for example 2026-10-29T16:00:00Z).
+incremental_snapshot() {
+  local pattern
+  case "$1" in
+    started) pattern="Requested 'INCREMENTAL' snapshot of data collections '\\[HrCore\\.dbo\\.$2\\]'" ;;
+    finished) pattern="incremental snapshotting of table 'HrCore\\.dbo\\.$2' finished" ;;
+  esac
+  docker compose logs --since "$3" connect 2>&1 | grep -qE "$pattern"
+}
+
+# log_count <service> <pattern>: prints how many log lines of the service match the pattern.
+log_count() {
+  docker compose logs --no-log-prefix "$1" 2>/dev/null | grep -cE "$2" || true
+}
+
 # api <path>: GETs a Query API path and prints the body; fails on a non-2xx status.
 api() {
   curl -fsS "http://127.0.0.1:5103$1"

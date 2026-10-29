@@ -11,6 +11,27 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: A registry 404 would have stalled the projector forever
+
+- **Symptom:** none at run time; the compiler reported an unreachable
+  pattern while the projector's failure rules were rewritten.
+- **Cause:** `SchemaRegistryException` derives from `HttpRequestException`.
+  The projector retried every `HttpRequestException` as "registry
+  unreachable", so a message with an unknown schema id (registry 404) would
+  have been retried on the same offset forever.
+- **Fix:** the registry exception is classified first: 5xx, 408, and 429 are
+  retried, any other status dead-letters the message. Test:
+  `IsTransient_RetriesOnlyUnreachableOrOverloadedDependencies`.
+
+### 2026-10-29: `docker compose logs --since` read UTC as local time
+
+- **Symptom:** the first run of the backfill check reported the snapshot
+  finished two seconds after the signal; it had matched the log line of an
+  earlier snapshot.
+- **Cause:** a `--since` time without a zone is taken as local time; the
+  machine is not on UTC, so the window reached an hour back.
+- **Fix:** every `--since` time carries `Z`.
+
 ### 2026-10-29: Woodpecker reports exit code 143 for the Kafka and registry services
 
 - **Symptom:** after the first Woodpecker run with the integration step, the

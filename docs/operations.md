@@ -61,6 +61,7 @@ Settings that matter:
 | `snapshot.isolation.mode=snapshot` | consistent initial snapshot without shared locks; the default kept locks that blocked all updates |
 | `provide.transaction.metadata=true` | `BEGIN`/`END` per source transaction on `cdc.transaction`, with event counts per table |
 | `signal.data.collection` | incremental snapshots on demand through `dbo.DebeziumSignal` |
+| `incremental.snapshot.chunk.size=20` | an incremental snapshot reads 20 rows per chunk, so a backfill of the small demo tables spans several chunks and streaming visibly continues in between |
 | `heartbeat.action.query` | updates `dbo.DebeziumHeartbeat` every 10 s, so the source always changes while the connector runs |
 | `decimal.handling.mode=string` | amounts arrive as exact decimal strings |
 | `tombstones.on.delete=false` | deletes are one event with the before image |
@@ -86,6 +87,8 @@ bash scripts/scenarios/02-raise-next-month.sh      # SalaryChanged, not retroact
 bash scripts/scenarios/03-retroactive-raise.sh     # retroactive SalaryChanged; validAt and knownAt answers
 bash scripts/scenarios/04-correction.sh            # SalaryCorrected; the earlier version stays in the history
 bash scripts/scenarios/05-hire-one-transaction.sh  # one EmployeeHired from three tables
+bash scripts/scenarios/06-idempotency.sh           # business and raw replay; read model unchanged
+bash scripts/scenarios/07-dead-letter.sh           # bad row and poison messages in hr.dlq; translator and projector go on
 ```
 
 Each scenario runs its `.sql` file (safe to rerun) and checks the events and,
@@ -117,6 +120,56 @@ docker compose logs pay-history-projector | grep -E 'Applied|NoChange|Duplicate'
 
 The projector logs every event as `Applied`, `NoChange`, or `Duplicate`, with
 its type, id, and Kafka position; never an amount.
+
+## Replay
+
+Rebuild the read model from the business topic:
+
+```sh
+scripts/ops/replay-projector.sh
+```
+
+The script waits until the projector has caught up and takes the read-model
+checksum (`scripts/checks/readmodel-checksum.sql`: event and row counts and
+an MD5 over every `pay_history` row without its surrogate key). It then
+stops the projector, empties `pay_history` and `processed_event`, resets the
+group to the earliest offsets, and starts the projector again. When the
+projector has caught up, it compares the checksum. The same steps by hand:
+
+```sh
+docker compose stop pay-history-projector
+docker compose exec postgres psql -U payhistory -d payhistory -c 'TRUNCATE pay_history, processed_event RESTART IDENTITY;'
+docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --group cdcpay-pay-history-projector --topic hr.employee-pay.v1 --reset-offsets --to-earliest --execute
+docker compose start pay-history-projector
+docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 \
+  --describe --group cdcpay-pay-history-projector   # LAG 0 on every partition: done
+```
+
+Run it while the source is quiet: a change committed during the replay
+changes the checksum. The Query API answers from a partial read model until
+the projector has caught up. A reset needs the group to be inactive, so the
+projector is stopped first.
+
+## Backfill
+
+Re-read one source table without stopping streaming:
+
+```sh
+scripts/ops/backfill.sh Salary       # Tenant, Employee, Position, or Salary
+```
+
+The script inserts an `execute-snapshot` signal into `dbo.DebeziumSignal` and
+waits until Connect logs that the incremental snapshot has finished. The rows
+arrive with `"snapshot":"incremental"` and become snapshot events. Their ids
+come from the row content (see [event-design.md](event-design.md)), so
+unchanged rows are duplicates. A row that changed since the first snapshot
+gets a new id, but the read model already states it, so the merge is a
+no-op. A backfill adds no `pay_history` rows.
+`scripts/checks/backfill-while-streaming.sh` proves both points. It commits a
+raise while the snapshot runs and checks that the raise is published before
+the snapshot finishes. It then checks that every row recorded since the
+start belongs to the raise.
 
 ## Contracts
 

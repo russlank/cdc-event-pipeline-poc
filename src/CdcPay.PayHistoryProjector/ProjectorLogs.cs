@@ -23,15 +23,15 @@ internal static partial class ProjectorLogs
     [LoggerMessage(EventId = 3004, Level = LogLevel.Information, Message = "Read-model schema applied ({ScriptCount} scripts)")]
     public static partial void SchemaApplied(ILogger logger, int scriptCount);
 
-    [LoggerMessage(EventId = 3005, Level = LogLevel.Warning, Message = "Read model unavailable ({Operation}); retrying in {RetryDelay}")]
-    public static partial void ReadModelUnavailable(ILogger logger, Exception exception, string operation, TimeSpan retryDelay);
-
-    [LoggerMessage(EventId = 3006, Level = LogLevel.Warning, Message = "Schema Registry unavailable; retrying in {RetryDelay}")]
-    public static partial void SchemaRegistryUnavailable(ILogger logger, Exception exception, TimeSpan retryDelay);
+    [LoggerMessage(EventId = 3005, Level = LogLevel.Warning, Message = "{Operation} failed with {ErrorType}, a transient error; retrying in {RetryDelay}")]
+    public static partial void Retrying(ILogger logger, string operation, Type errorType, TimeSpan retryDelay);
 
     [LoggerMessage(EventId = 3010, Level = LogLevel.Information, Message = "{Result} {EventType} {EventId} from {Position}")]
     public static partial void EventProjected(ILogger logger, ProjectionResult result, string eventType, Guid eventId, string position);
 
-    [LoggerMessage(EventId = 3011, Level = LogLevel.Critical, Message = "Cannot project the message at {Position}: {Detail}; stopping")]
-    public static partial void UnprojectableMessage(ILogger logger, Exception exception, string position, string detail);
+    [LoggerMessage(EventId = 3012, Level = LogLevel.Warning, Message = "Dead-lettered {Position}: {Reason} ({Detail})")]
+    public static partial void DeadLettered(ILogger logger, string position, string reason, string detail);
+
+    [LoggerMessage(EventId = 3013, Level = LogLevel.Critical, Message = "Projecting {Position} failed with {ErrorType}; stopping")]
+    public static partial void ProjectionFailed(ILogger logger, string position, Type errorType);
 }

@@ -18,6 +18,7 @@
 
     "provide.transaction.metadata": "true",
     "signal.data.collection": "HrCore.dbo.DebeziumSignal",
+    "incremental.snapshot.chunk.size": "20",
     "heartbeat.interval.ms": "10000",
     "heartbeat.action.query": "UPDATE HrCore.dbo.DebeziumHeartbeat SET LastBeat = SYSUTCDATETIME() WHERE Id = 1",
 

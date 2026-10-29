@@ -69,6 +69,7 @@ settings are validated at startup.
 | `Kafka:SchemaRegistryUrl` | `http://127.0.0.1:8081` | compose: `http://schema-registry:8081` |
 | `Kafka:ConsumerGroup` | `cdcpay-pay-history-projector` | |
 | `Kafka:Topic` | `hr.employee-pay.v1` | |
+| `Kafka:DeadLetterTopic` | `hr.dlq` | for messages that are not usable business events |
 | `Kafka:CommitInterval` | `00:00:01` | offsets of applied events are committed this often |
 | `Kafka:RetryDelay` | `00:00:02` | wait between attempts while PostgreSQL or the Schema Registry is unreachable |
 | `ConnectionStrings:ReadModel` | none, required | Npgsql connection string of the owner login |

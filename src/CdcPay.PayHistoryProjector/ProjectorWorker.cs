@@ -11,16 +11,21 @@ namespace CdcPay.PayHistoryProjector;
 
 /// <summary>
 /// Projects business events into the bitemporal read model, one database transaction per event.
-/// An event's offset is stored only after its transaction commits and is committed periodically,
-/// so delivery is at-least-once; <c>processed_event</c> turns a redelivery into a no-op.
-/// Transient database errors are retried without moving on; a message that cannot be projected
-/// stops the host, and it resumes from the last committed offset.
+/// An event's offset is stored only after its transaction commits (or after the message is
+/// dead-lettered) and is committed periodically, so delivery is at-least-once;
+/// <c>processed_event</c> turns a redelivery into a no-op.
+/// Failures (<see cref="ProjectorFailures"/>): a transient one is retried on the same message and
+/// never dead-letters it; a message that is not a usable business event goes to the dead-letter
+/// topic and the projector moves on; any other failure stops the host, which resumes from the last
+/// committed offset.
 /// </summary>
 public sealed class ProjectorWorker(
     IOptions<ProjectorOptions> options,
     NpgsqlDataSource dataSource,
     PayHistoryStore store,
     ISchemaRegistryClient schemaRegistry,
+    ProjectorDeadLetters deadLetters,
+    ProjectorMetrics metrics,
     ProjectorStatus status,
     TimeProvider clock,
     ILogger<ProjectorWorker> logger) : BackgroundService
@@ -37,7 +42,7 @@ public sealed class ProjectorWorker(
 
     private async Task RunAsync(CancellationToken stoppingToken)
     {
-        int scripts = await WithReadModelAsync("apply schema", async () =>
+        int scripts = await RetryTransientAsync("apply schema", async () =>
         {
             await ReadModelSchema.ApplyAsync(dataSource, stoppingToken);
             return ReadModelSchema.ScriptNames.Count;
@@ -55,7 +60,7 @@ public sealed class ProjectorWorker(
             {
                 if (Poll(consumer) is { IsPartitionEOF: false, Message: not null } result)
                 {
-                    await ProjectAsync(result, stoppingToken);
+                    await HandleAsync(result, stoppingToken);
                     consumer.StoreOffset(result);
                 }
             }
@@ -68,50 +73,51 @@ public sealed class ProjectorWorker(
         consumer.Close();
     }
 
-    private async Task ProjectAsync(ConsumeResult<byte[]?, byte[]> result, CancellationToken stoppingToken)
+    private async Task HandleAsync(ConsumeResult<byte[]?, byte[]> result, CancellationToken stoppingToken)
     {
         string position = result.TopicPartitionOffset.ToString();
-        PayEvent payEvent = await DeserializeAsync(result, position, stoppingToken);
+        PayEvent? payEvent;
         try
         {
-            ProjectionResult projected = await WithReadModelAsync("project", () => store.ProjectAsync(payEvent, stoppingToken), stoppingToken);
+            SerializationContext context = new(MessageComponentType.Value, result.Topic, result.Message.Headers);
+            payEvent = await RetryTransientAsync(
+                "read schema", () => _deserializer.DeserializeAsync(result.Message.Value, result.Message.Value is null, context), stoppingToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // The exception text may quote the message; only its type is recorded.
+            await deadLetters.PublishAsync(
+                result, ProjectorFailures.Undeserializable, $"{exception.GetType().Name}: not a business event of the contract", stoppingToken);
+            return;
+        }
+
+        if (payEvent is null)
+        {
+            await deadLetters.PublishAsync(result, ProjectorFailures.Undeserializable, "empty value", stoppingToken);
+            return;
+        }
+
+        try
+        {
+            ProjectionResult projected = await RetryTransientAsync("project", () => store.ProjectAsync(payEvent, stoppingToken), stoppingToken);
+            metrics.Projected(projected);
             ProjectorLogs.EventProjected(logger, projected, payEvent.eventType, payEvent.eventId, position);
         }
         catch (PayEventException exception)
         {
-            ProjectorLogs.UnprojectableMessage(logger, exception, position, exception.Message);
+            await deadLetters.PublishAsync(result, ProjectorFailures.InvalidEvent, exception.Message, stoppingToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Only the type: database errors can quote row values in their detail.
+            Type errorType = exception.GetType();
+            ProjectorLogs.ProjectionFailed(logger, position, errorType);
             throw;
         }
     }
 
-    /// <summary>
-    /// An unreachable Schema Registry is retried; any other failure means the message is not a
-    /// business event of the contract, and the host stops.
-    /// </summary>
-    private async Task<PayEvent> DeserializeAsync(ConsumeResult<byte[]?, byte[]> result, string position, CancellationToken stoppingToken)
-    {
-        SerializationContext context = new(MessageComponentType.Value, result.Topic, result.Message.Headers);
-        while (true)
-        {
-            try
-            {
-                return await _deserializer.DeserializeAsync(result.Message.Value, result.Message.Value is null, context);
-            }
-            catch (HttpRequestException exception) when (!stoppingToken.IsCancellationRequested)
-            {
-                ProjectorLogs.SchemaRegistryUnavailable(logger, exception, _options.RetryDelay);
-                await Task.Delay(_options.RetryDelay, clock, stoppingToken);
-            }
-            catch (Exception exception) when (exception is not HttpRequestException and not OperationCanceledException)
-            {
-                ProjectorLogs.UnprojectableMessage(logger, exception, position, "not a business event of the contract");
-                throw;
-            }
-        }
-    }
-
-    /// <summary>Retries transient database errors (connection refused, failover, serialization) until stopped.</summary>
-    private async Task<T> WithReadModelAsync<T>(string operation, Func<Task<T>> action, CancellationToken stoppingToken)
+    /// <summary>Retries transient failures (<see cref="ProjectorFailures.IsTransient"/>) until stopped.</summary>
+    private async Task<T> RetryTransientAsync<T>(string operation, Func<Task<T>> action, CancellationToken stoppingToken)
     {
         while (true)
         {
@@ -119,9 +125,10 @@ public sealed class ProjectorWorker(
             {
                 return await action();
             }
-            catch (NpgsqlException exception) when (exception.IsTransient && !stoppingToken.IsCancellationRequested)
+            catch (Exception exception) when (ProjectorFailures.IsTransient(exception) && !stoppingToken.IsCancellationRequested)
             {
-                ProjectorLogs.ReadModelUnavailable(logger, exception, operation, _options.RetryDelay);
+                Type errorType = exception.GetType();
+                ProjectorLogs.Retrying(logger, operation, errorType, _options.RetryDelay);
                 await Task.Delay(_options.RetryDelay, clock, stoppingToken);
             }
         }

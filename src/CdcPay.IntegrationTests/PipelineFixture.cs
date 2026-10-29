@@ -78,6 +78,15 @@ public sealed class PipelineFixture : IAsyncLifetime
         return topic;
     }
 
+    /// <summary>A new single-partition topic for dead letters.</summary>
+    public async Task<string> CreateDeadLetterTopicAsync()
+    {
+        string topic = $"it.dlq.{Guid.NewGuid():N}";
+        using IAdminClient admin = new AdminClientBuilder(new AdminClientConfig { BootstrapServers = BootstrapServers }).Build();
+        await admin.CreateTopicsAsync([new TopicSpecification { Name = topic, NumPartitions = 1, ReplicationFactor = 1 }]);
+        return topic;
+    }
+
     /// <summary>A new, empty database; returns its connection string.</summary>
     public async Task<string> CreateDatabaseAsync(CancellationToken cancellationToken)
     {

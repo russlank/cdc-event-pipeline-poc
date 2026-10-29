@@ -95,9 +95,17 @@ unit tests for each case. The store only runs its plan.
 
 | Situation | Behaviour |
 |---|---|
-| The same event delivered again (replay, redelivery) | `processed_event` conflict: skipped, logged as `Duplicate` |
-| PostgreSQL or Schema Registry unreachable | retried every 2 s, the event is not skipped |
-| A message that is not a business event of the contract | logged as critical; the host stops and restarts from the last committed offset |
+| The same event delivered again (replay, redelivery, backfill of unchanged rows) | `processed_event` conflict: skipped, logged as `Duplicate`, counted in `cdcpay.projector.events.duplicate` |
+| PostgreSQL unreachable, failing over, or a serialization conflict; Schema Registry unreachable, 5xx, 408, or 429 | retried every 2 s on the same message; never dead-lettered |
+| Not Avro of a registered contract version, or an empty value | to `hr.dlq` with reason `Undeserializable`; the projector moves on |
+| A payload that does not match `eventType` | to `hr.dlq` with reason `InvalidEvent`; the projector moves on |
+| Any other database error (a bug, a broken constraint) | logged as critical with the error type only; the host stops and restarts from the last committed offset |
+
+A dead-lettered message's offset is committed like a projected one. The
+projector's counters (meter `CdcPay.PayHistoryProjector`) are
+`cdcpay.projector.events.applied` (tag `result`: `changed` or `unchanged`),
+`cdcpay.projector.events.duplicate`, and `cdcpay.projector.dlq.produced`
+(tag `reason`).
 
 ## Query API
 

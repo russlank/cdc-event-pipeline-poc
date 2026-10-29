@@ -100,10 +100,14 @@ released transaction never had is dead-lettered.
 
 ## Dead-Letter Reasons
 
-Each dead-lettered message keeps its original key and value. Headers:
-`dlq.reason`, `dlq.error` (a description that never quotes row values),
-`dlq.component`, `dlq.source.topic`, `dlq.source.partition`,
-`dlq.source.offset`, `dlq.timestamp`.
+Each dead-lettered message keeps its original key and value. Headers
+(`CdcPay.Contracts.DeadLetterHeaders`): `dlq.reason`, `dlq.error`,
+`dlq.component` (`event-translator` or `pay-history-projector`),
+`dlq.source.topic`, `dlq.source.partition`, `dlq.source.offset`,
+`dlq.timestamp`. `dlq.error` never quotes names or amounts; it may name a
+rejected code, such as an unsupported currency.
+
+From the translator (raw CDC topics):
 
 | `dlq.reason` | When |
 |---|---|
@@ -113,6 +117,16 @@ Each dead-lettered message keeps its original key and value. Headers:
 | `UnsupportedChange` | a delete, a row moved to another employee, or an untranslated table (legitimate deletes such as erasure requests would need a dedicated event) |
 | `UnclassifiedTransaction` | rows that match none of the shapes above |
 | `IncompleteTransaction` | a transaction still incomplete after the timeout (default 60 s), or a row that its already released transaction did not have |
+
+From the projector (`hr.employee-pay.v1`; the message's own headers are kept as well):
+
+| `dlq.reason` | When |
+|---|---|
+| `Undeserializable` | not Avro of a registered contract version (bad framing, unknown schema id), or an empty value |
+| `InvalidEvent` | valid Avro, but the payload does not match `eventType` |
+
+A replay of raw topics (scenario 6) dead-letters the same bad messages again;
+`dlq.source.*` identifies repeats.
 
 ## Compatibility
 

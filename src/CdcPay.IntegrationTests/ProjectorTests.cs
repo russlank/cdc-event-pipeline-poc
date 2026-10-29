@@ -75,7 +75,87 @@ public sealed class ProjectorTests(PipelineFixture pipeline)
         }
     }
 
-    private async Task<IHost> StartProjectorAsync(string topic, string group, string database, CancellationToken cancellationToken)
+    [Fact]
+    public async Task Projector_PoisonMessages_AreDeadLetteredAndProjectionContinues()
+    {
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        string topic = await pipeline.CreateTopicAsync(cancellationToken);
+        string deadLetters = await pipeline.CreateDeadLetterTopicAsync();
+        string database = await pipeline.CreateDatabaseAsync(cancellationToken);
+        byte[] notAvro = "not an Avro business event"u8.ToArray();
+        PayEvent valid = FixtureStream.Events[0];
+        // A SalaryChanged whose payload is a termination: valid Avro, not a usable event.
+        PayEvent template = FixtureStream.Events[2];
+        PayEvent mismatched = new()
+        {
+            eventId = Guid.NewGuid(),
+            eventType = EventTypes.SalaryChanged,
+            schemaVersion = template.schemaVersion,
+            tenantId = template.tenantId,
+            employeeId = template.employeeId,
+            effectiveFrom = template.effectiveFrom,
+            recordedAt = template.recordedAt,
+            isRetroactive = template.isRetroactive,
+            source = template.source,
+            payload = new EmployeeTerminatedPayload { terminationDate = template.effectiveFrom },
+        };
+
+        // Same key, so all three land on one partition in this order.
+        using (IProducer<byte[], byte[]> raw = new ProducerBuilder<byte[], byte[]>(new ProducerConfig { BootstrapServers = pipeline.BootstrapServers }).Build())
+        {
+            _ = await raw.ProduceAsync(topic, new Message<byte[], byte[]> { Key = "1:1003"u8.ToArray(), Value = notAvro }, cancellationToken);
+        }
+
+        await ProduceAsync(topic, [mismatched, valid], cancellationToken);
+
+        using (IHost host = await StartProjectorAsync(topic, "it-poison", database, cancellationToken, deadLetters))
+        {
+            await WaitForCommittedEndAsync(topic, "it-poison", cancellationToken);
+            await host.StopAsync(cancellationToken);
+        }
+
+        List<Message<byte[]?, byte[]>> dead = ReadAll(deadLetters, expected: 2);
+        Assert.Equal(
+            [(ProjectorFailures.Undeserializable, ProjectorDeadLetters.Component, topic), (ProjectorFailures.InvalidEvent, ProjectorDeadLetters.Component, topic)],
+            dead.Select(message => (Header(message, DeadLetterHeaders.Reason), Header(message, DeadLetterHeaders.Component), Header(message, DeadLetterHeaders.SourceTopic))));
+        Assert.Equal(notAvro, dead[0].Value);
+        Assert.Equal("1:1003"u8.ToArray(), dead[0].Key);
+
+        await using var dataSource = NpgsqlDataSource.Create(database);
+        Assert.Single(await new PayHistoryReader(dataSource).HistoryAsync(1, 1003, cancellationToken));
+        Assert.Equal(1, await CountAsync(dataSource, "processed_event", cancellationToken));
+    }
+
+    private List<Message<byte[]?, byte[]>> ReadAll(string topic, int expected)
+    {
+        using IConsumer<byte[]?, byte[]> consumer = new ConsumerBuilder<byte[]?, byte[]>(new ConsumerConfig
+        {
+            BootstrapServers = pipeline.BootstrapServers,
+            GroupId = $"it-read-{Guid.NewGuid():N}",
+            AutoOffsetReset = AutoOffsetReset.Earliest,
+            EnableAutoCommit = false,
+        }).Build();
+        consumer.Subscribe(topic);
+        List<Message<byte[]?, byte[]>> messages = [];
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + Deadline;
+        while (messages.Count < expected && DateTimeOffset.UtcNow < deadline)
+        {
+            if (consumer.Consume(TimeSpan.FromMilliseconds(500)) is { Message: { } message })
+            {
+                messages.Add(message);
+            }
+        }
+
+        consumer.Close();
+        Assert.Equal(expected, messages.Count);
+        return messages;
+    }
+
+    private static string Header(Message<byte[]?, byte[]> message, string name) =>
+        System.Text.Encoding.UTF8.GetString(message.Headers.GetLastBytes(name));
+
+    private async Task<IHost> StartProjectorAsync(
+        string topic, string group, string database, CancellationToken cancellationToken, string? deadLetterTopic = null)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder();
         _ = builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -84,6 +164,7 @@ public sealed class ProjectorTests(PipelineFixture pipeline)
             ["Kafka:SchemaRegistryUrl"] = pipeline.SchemaRegistryUrl,
             ["Kafka:Topic"] = topic,
             ["Kafka:ConsumerGroup"] = group,
+            ["Kafka:DeadLetterTopic"] = deadLetterTopic ?? PayEventContract.DeadLetterTopic,
             ["Kafka:CommitInterval"] = "00:00:00.200",
             [$"ConnectionStrings:{ProjectorServiceExtensions.ReadModelConnection}"] = database,
         });
