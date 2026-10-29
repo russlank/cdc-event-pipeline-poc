@@ -1,5 +1,7 @@
 name: ci
 
+# Runs the same gates as .woodpecker.yml: ci/dotnet-gates.sh.
+
 on:
   push:
     branches: [main]
@@ -11,9 +13,6 @@ permissions:
 jobs:
   dotnet:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: src
     steps:
       - uses: actions/checkout@v7.0.1
 
@@ -21,17 +20,5 @@ jobs:
         with:
           global-json-file: src/global.json
 
-      - name: Restore
-        run: dotnet restore ./CdcPay.slnx
-
-      - name: Build
-        run: >-
-          dotnet build ./CdcPay.slnx -c Release --no-restore
-          -p:SourceBranch=${{ github.ref_name }}
-          -p:RepositoryUrl=${{ github.server_url }}/${{ github.repository }}
-
-      - name: Test
-        run: dotnet test ./CdcPay.slnx -c Release --no-build
-
-      - name: Format
-        run: dotnet format ./CdcPay.slnx --verify-no-changes
+      - name: .NET gates
+        run: bash ci/dotnet-gates.sh "${{ github.ref_name }}" "${{ github.server_url }}/${{ github.repository }}"

@@ -1,0 +1,11 @@
+# Woodpecker CI. Runs the same gates as .github/workflows/ci.yml: ci/dotnet-gates.sh.
+
+when:
+  - event: [push, pull_request, manual]
+
+steps:
+  dotnet:
+    # Same SDK as src/global.json; restores need nuget.org.
+    image: mcr.microsoft.com/dotnet/sdk:10.0.402-noble
+    commands:
+      - bash ci/dotnet-gates.sh "$${CI_COMMIT_BRANCH}" "$${CI_REPO_URL}"

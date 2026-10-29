@@ -10,7 +10,15 @@ How the code is tested and how to run the checks.
 
 ## Gates
 
-Run from `src/`. CI (`.github/workflows/ci.yml`) runs the same commands.
+`ci/dotnet-gates.sh` runs all four gates; both CI pipelines call it
+(`.woodpecker.yml` in `mcr.microsoft.com/dotnet/sdk:10.0.402-noble`, and
+`.github/workflows/ci.yml` on GitHub-compatible runners). Locally:
+
+```sh
+bash ci/dotnet-gates.sh            # optional: <branch> <repository-url> for the build identity
+```
+
+The same gates by hand, from `src/`:
 
 ```sh
 dotnet restore ./CdcPay.slnx
