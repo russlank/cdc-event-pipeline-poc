@@ -202,6 +202,7 @@ the source is otherwise quiet.
 
 ```sh
 bash scripts/drills/01-connect-restart.sh   # Connect stopped mid-transaction, changes made, restarted
+bash scripts/drills/02-agent-stopped.sh     # SQL Server Agent stopped, changes made, started
 ```
 
 Drill 1 commits a raise and stops Connect as soon as Debezium has sent its
@@ -212,6 +213,14 @@ read model matches the source as before. It compares the source with the read
 model row by row (`readmodel_divergence` in `scripts/scenarios/lib.sh`):
 every `Salary` row needs exactly one current `pay_history` row. Scenario 7's
 rejected row is the expected difference.
+
+Drill 2 stops SQL Server Agent (`EXEC master.dbo.xp_servicecontrol N'STOP',
+N'SQLServerAGENT'`), commits two raises, and waits for `CdcEventsStalled`.
+It passes when nothing is captured or sent while Agent is down, the alert
+fires, and after `xp_servicecontrol N'START'` the capture job (it starts with
+Agent) catches up: both events applied once, recorded at their source commit
+time, nothing dead-lettered, and the alert resolved. Drill helpers are in
+`scripts/drills/lib.sh`.
 
 ### Repairing a Read Model That Misses a Transaction
 

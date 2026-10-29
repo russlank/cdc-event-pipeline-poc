@@ -1,6 +1,6 @@
--- Drill 1: raises for employees $(First)..$(Last) of tenant 3, one transaction each: close the open
--- salary period, insert the raise one month after its start, never earlier than next month.
--- Every run adds new raises. Set First and Last with :setvar before this script.
+-- Raises for employees $(First)..$(Last) of tenant 3, one transaction each: close the open salary
+-- period, insert the raise one month after its start, never earlier than next month. Used by the
+-- failure drills; every run adds new raises. Set First and Last with :setvar before this script.
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;

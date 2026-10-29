@@ -11,6 +11,34 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: Drill 2, SQL Server Agent stopped
+
+- **Setup:** stack caught up, read model `233 events, 129 rows`, equal to the
+  source except scenario 7's row. `bash scripts/drills/02-agent-stopped.sh`:
+  Agent stopped with `xp_servicecontrol N'STOP', N'SQLServerAGENT'` (works
+  in the Linux container; `sys.dm_server_services` then reports `Other`, not
+  `Stopped`), raises for 3001 and 3002 committed at 22:56:35Z.
+- **What happened:** capture stopped at once: no new rows in the Salary
+  change table, no message on `cdc.HrCore.dbo.Salary`, nothing applied. The
+  connector task stayed `RUNNING` and Debezium logged nothing, not even a
+  warning; its heartbeat query kept updating the source, uncaptured.
+  `debezium_metrics_millisecondssincelastevent` grew, and `CdcEventsStalled`
+  fired 203 s after the commits (`No change event from SQL Server for 3m
+  13s`). Agent started at 23:00:01Z; the capture job started with it, and
+  both raises were in the read model 8 s later (`235 events, 133 rows`, no
+  new difference to the source), nothing dead-lettered; the alert resolved.
+- **Cause:** Debezium checks Agent only when the database has no maximum LSN
+  at all (`SqlServerStreamingChangeEventSource`: `No maximum LSN recorded in
+  the database; SQL Server Agent is not running`). With CDC history present,
+  the maximum LSN just stops moving and Debezium sees no new change.
+- **Conclusion:** no fix needed. Detection relies on the heartbeat (the
+  source changes every 10 s) and `CdcEventsStalled`; the runbook in
+  [monitoring.md](monitoring.md) now says so and how to start Agent. The
+  events carry the source commit time as `recordedAt` (22:56:35Z), not the
+  capture time, so the read model's recorded time is right after the delay.
+  Not observed: a long outage also keeps SQL Server from truncating the
+  transaction log until capture catches up.
+
 ### 2026-10-29: Drill 1, Kafka Connect stopped while the source changes
 
 - **Setup:** stack caught up; read model `228 events, 119 rows`, equal to the
@@ -95,7 +123,11 @@ and fix, newest first. Failure drills add their results here as well.
   change ends the transaction with its own time and nothing fails. So the
   failure needs a restart with no change waiting, and it races the first
   heartbeat; it hit 4 of 5 such restarts in the drill. The code is the same in
-  3.6.3, 3.7.0.Final, and on main, so an upgrade does not help. The END was
+  3.6.3, 3.7.0.Final, and on main, so an upgrade does not help. A
+  throwaway `quay.io/debezium/connect:3.7.0.Final` worker with its own
+  connector and topics failed the same way on its 2nd restart once it was the
+  only connector; while the main connector also updated the heartbeat table,
+  5 restarts passed, because its updates were changes waiting at startup. The END was
   emitted after the task restart in the drill runs (with the open rows sent
   again, see the drill 1 entry), contrary to the first observation.
 - **Fix:** `connect-watchdog` restarts the task after exactly this failure

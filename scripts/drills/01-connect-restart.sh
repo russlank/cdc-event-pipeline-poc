@@ -12,54 +12,11 @@
 # dead-lettered. Alerts during the drill are printed.
 # Run on a caught-up stack while the source is otherwise quiet.
 
-source "$(dirname "$0")/../scenarios/lib.sh"
+source "$(dirname "$0")/lib.sh"
 
 down_seconds=${DOWN_SECONDS:-120}
-translator=cdcpay-event-translator
-projector=cdcpay-pay-history-projector
-
-# raises <first> <last>: commits a raise for each employee <first>..<last> of tenant 3.
-raises() {
-  run_sql <(printf ':setvar First %s\n:setvar Last %s\n' "$1" "$2"; cat scripts/drills/01-changes.sql)
-}
-
-# task_state: prints the state of the connector's task (RUNNING, FAILED, ...), nothing while
-# Connect does not answer.
-task_state() {
-  curl -fsS localhost:8083/connectors/hrcore-cdc/status 2>/dev/null \
-    | sed -n 's/.*"tasks":\[{"id":0,"state":"\([A-Z]*\)".*/\1/p' || true
-}
-
-task_running() { [ "$(task_state)" = RUNNING ]; }
-
-# kafka_tool <tool> <args...>: runs a Kafka command-line tool against the broker.
-kafka_tool() {
-  docker compose exec -T kafka "/opt/kafka/bin/$1" --bootstrap-server kafka:9092 "${@:2}"
-}
-
-# last_message <topic>: prints the last message of a single-partition topic.
-last_message() {
-  kafka_tool kafka-console-consumer.sh --topic "$1" --from-beginning --property print.key=true \
-    --timeout-ms 5000 2>/dev/null | tail -n 1
-}
-
-# end_offset <topic>: prints the sum of the end offsets of the topic's partitions.
-end_offset() {
-  kafka_tool kafka-get-offsets.sh --topic "$1" | awk -F: '{ sum += $3 } END { print sum }'
-}
 
 salary_rows_sent() { [ "$(end_offset cdc.HrCore.dbo.Salary)" != "$salary_offset" ]; }
-
-# processed_events: prints the number of events the projector has applied.
-processed_events() {
-  readmodel_sql 'SELECT count(*) FROM processed_event'
-}
-
-# The translator's group is not waited for: its offset on the heartbeat topic stays one behind
-# while the latest heartbeat transaction waits for its END.
-caught_up() {
-  group_caught_up "$projector" && [ "$(readmodel_divergence)" = "$divergence_before" ]
-}
 
 echo "== before"
 docker compose ps --format 'table {{.Service}}\t{{.Status}}'
@@ -74,9 +31,7 @@ dlq_before=$(end_offset hr.dlq)
 echo "read model: $checksum_before"
 echo "rows that differ from the source (expected: scenario 7 only):"
 echo "${divergence_before:-(none)}"
-if echo "$divergence_before" | grep -qE '^[<>] 3\|300[1-5]\|'; then
-  fail "rows of employees 3001..3005 differ from the source before the drill; repair with scripts/ops/backfill.sh Salary"
-fi
+require_drill_rows_in_sync "$divergence_before"
 
 echo "== 1. raise for 3001, stop Connect once its rows are sent"
 started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -108,7 +63,7 @@ docker compose logs --since "$restarted" --no-log-prefix connect 2>&1 \
 docker compose logs --since "$restarted" --no-log-prefix connect-watchdog 2>&1 | grep restarted || true
 
 echo "== after"
-wait_for 240 "the raises to reach the read model" caught_up
+wait_for 240 "the raises to reach the read model" readmodel_back_to "$divergence_before"
 checksum_after=$(readmodel_checksum)
 applied=$(($(processed_events) - events_before))
 duplicates=$(($(log_count pay-history-projector 'Duplicate ') - duplicates_before))
@@ -116,10 +71,9 @@ dead_lettered=$(($(end_offset hr.dlq) - dlq_before))
 echo "read model: $checksum_after"
 echo "events applied: $applied; duplicates skipped by the projector: $duplicates; messages dead-lettered: $dead_lettered"
 echo "translator:"
-docker compose logs --since "$started" --no-log-prefix event-translator 2>/dev/null \
-  | grep -oE '"Message":"(Abandoned|Dead-lettered)[^"]*"' | cut -c 1-160 || true
+print_translator_losses "$started"
 echo "alerts:"
-docker compose logs --since "$started" --no-log-prefix alert-sink 2>&1 | grep -E '^ALERT ' | cut -c 1-160 || true
+print_alerts "$started"
 
 [ "$applied" = 5 ] || fail "expected 5 events applied, found $applied"
 [ "$dead_lettered" = 0 ] || fail "$dead_lettered messages dead-lettered during the drill"
