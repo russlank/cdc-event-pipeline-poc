@@ -11,6 +11,19 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: Woodpecker reports exit code 143 for the Kafka and registry services
+
+- **Symptom:** after the first Woodpecker run with the integration step, the
+  `kafka` and `schema-registry` services were shown with exit code 143;
+  GitHub Actions was green.
+- **Cause:** not a failure. The service logs show both integration tests and
+  the contract gate using the services to the end; one second after the last
+  request Woodpecker stopped the services with SIGTERM, and both JVMs shut
+  down cleanly and exited with 128 + 15. PostgreSQL exits 0 on SIGTERM, so it
+  looked fine.
+- **Fix:** `failure: ignore` on the two services, as Woodpecker's services
+  documentation suggests; the steps alone decide the result.
+
 ### 2026-10-29: The first read-model design would have mixed pay components
 
 - **Symptom:** none at run time; found while writing the merge. The design

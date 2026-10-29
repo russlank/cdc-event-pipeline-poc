@@ -4,10 +4,15 @@
 when:
   - event: [push, pull_request, manual]
 
+# Woodpecker stops the services with SIGTERM when the steps are done. The JVMs (Kafka, Schema
+# Registry) then exit with 143 (128 + SIGTERM) after a clean shutdown, so their exit code says
+# nothing about the pipeline: `failure: ignore`. The steps alone decide the result.
 services:
-  # Single-node Kafka for the Schema Registry; settings as in docker-compose.yml.
+  # Single-node Kafka for the Schema Registry and the integration tests; settings as in
+  # docker-compose.yml.
   kafka:
     image: apache/kafka:4.3.2
+    failure: ignore
     environment:
       CLUSTER_ID: QTEGCfpKUmmNZpjgXb67cA
       KAFKA_NODE_ID: "1"
@@ -24,6 +29,7 @@ services:
       KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
   schema-registry:
     image: confluentinc/cp-schema-registry:8.3.2
+    failure: ignore
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
