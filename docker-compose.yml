@@ -162,6 +162,15 @@ services:
       retries: 18
       start_period: 30s
 
+  # Restarts the Debezium task after the one known failure on Connect restarts (connect/watchdog.py).
+  connect-watchdog:
+    image: python:3.13.16-alpine3.23
+    command: ["python", "-u", "/watchdog/watchdog.py"]
+    volumes:
+      - ./connect/watchdog.py:/watchdog/watchdog.py:ro
+    mem_limit: 48m
+    restart: unless-stopped
+
   # One-shot: registers (or updates) the Debezium connector. Safe to rerun.
   connect-init:
     image: curlimages/curl:8.22.0

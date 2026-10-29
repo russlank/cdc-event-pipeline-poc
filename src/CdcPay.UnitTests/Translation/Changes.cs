@@ -31,6 +31,7 @@ internal static class Changes
         readMs ?? CommitMs,
         commitLsn,
         null,
+        null,
         true,
         null,
         null);
@@ -88,10 +89,18 @@ internal static class Changes
             commitMs ?? CommitMs,
             $"lsn-{tx}",
             $"lsn-{tx}-{order}",
+            1,
             false,
             tx,
             order);
     }
+
+    /// <summary>
+    /// The change as Debezium sends it again after a task restart: a new message, the same source
+    /// position, and the next total order of its transaction.
+    /// </summary>
+    public static RawChange Resent(RawChange change, long order) =>
+        change with { Message = Message(change.Table), TotalOrder = order };
 
     private static RawMessage Message(string table) =>
         new(new KafkaPosition($"cdc.HrCore.dbo.{table}", 0, Interlocked.Increment(ref s_offset)), null, [1]);

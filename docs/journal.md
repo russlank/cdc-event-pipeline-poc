@@ -11,6 +11,64 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: Drill 1, Kafka Connect stopped while the source changes
+
+- **Setup:** stack caught up; read model `228 events, 119 rows`, equal to the
+  source except scenario 7's rejected row. `docker compose stop connect`, five
+  raises for 3001..3005 (one transaction each), 120 s down, `docker compose
+  start connect`. Later runs use `scripts/drills/01-connect-restart.sh`, which
+  first commits the raise for 3001 and stops Connect as soon as its rows are
+  on `cdc.HrCore.dbo.Salary`.
+- **What happened, run 1 (changes only while down):** Debezium resumed at the
+  stored offset (`Last position recorded in offsets is
+  0000002f:000005a8:0003(...)[2]`, the offset written at the stop); the five
+  raises reached the read model once (`233 events, 129 rows`, no new
+  difference to the source). But 60 s after the stop, the translator
+  abandoned the heartbeat transaction that was open at the stop: one message
+  in `hr.dlq`, `DlqNotEmpty` and `TranslatorTransactionsStuck` fired next to
+  `ConnectorNotRunning` and `MetricsTargetDown`. Its END came after the
+  restart, too late.
+- **What happened, run by hand (raise open at the stop):** a raise for 3006
+  was committed and Connect stopped 8 s later, after its two rows and BEGIN
+  but before its END. 60 s later the translator dead-lettered both rows as
+  `IncompleteTransaction`. On start, the task failed (the Debezium failure
+  above); after its restart Debezium sent the two rows again with
+  `total_order` 3 and 4 (same `change_lsn` and `event_serial_no`) and an END
+  with `event_count` 4. The translator dead-lettered the resent rows as well
+  (`row that its already released transaction did not have`). The raise never
+  reached the read model: a gap.
+- **Cause:** the translator's 60 s timeout ran on the wall clock. Debezium
+  writes a transaction's END only when the next transaction begins, so an
+  outage longer than 60 s always lost the last transaction, a pay change when
+  Connect stopped within the 10 s heartbeat interval after it. Second, the
+  translator recognised a redelivered row by `total_order`, which Debezium
+  continues after a restart; the resent rows looked new, and the END's count
+  included them.
+- **Fix:** a transaction without END now times out 60 s after the BEGIN of a
+  later transaction (higher commit LSN), not 60 s after its first row. The
+  first version of this fix counted any message of another transaction. It
+  failed the next run: the heartbeat row of the transaction before the raise
+  arrived after the raise's BEGIN (topics are read independently) and started
+  the raise's timeout. Rows sent again by Debezium are recognised by source
+  position (`change_lsn`, `event_serial_no`), count toward the END, and are
+  not classified twice. Unit tests reproduce all three cases.
+- **Result:** `DOWN_SECONDS=90 bash scripts/drills/01-connect-restart.sh`:
+  the raise's transaction was open at the stop (offset with
+  `transaction_data_collection_order_HrCore.dbo.Salary`), Debezium resumed at
+  it, `events applied: 5; duplicates skipped by the projector: 0; messages
+  dead-lettered: 0`, read model `288 events, 175 rows` and equal to the source
+  as before. Alerts: `ConnectorNotRunning` and `MetricsTargetDown` only.
+- **Repair of the lost raises:** replaying the raw topics through the fixed
+  translator published them, but after later raises of the same employee; the
+  merge then replaced the later open period (3001 lost its newer raise). A
+  backfill (`scripts/ops/backfill.sh Salary`) restated every row and made the
+  read model equal to the source again. The runbook says so
+  ([operations.md](operations.md)).
+- **Drill script lessons:** Connect writes its final offset while it shuts
+  down, so the offset is read after the stop. The translator's group always
+  shows lag 1 on the heartbeat topic (its open transaction), so the script
+  waits for the projector and the read model instead.
+
 ### 2026-10-29: The Debezium task fails on every Connect restart
 
 - **Symptom:** after `docker compose stop connect` and `start` (and after the
@@ -29,6 +87,23 @@ and fix, newest first. Failure drills add their results here as well.
   so the translator abandons it after 60 s (`TranslatorTransactionsStuck`).
   No fix found in the 3.6 release notes. Drill 1 (stop Connect, change data,
   restart) has to decide on an upgrade or an automatic task restart.
+- **Update (drill 1):** the source shows the exact condition. At the start of
+  every poll, `SqlServerStreamingChangeEventSource` ends the open transaction
+  with the offset's source time once SQL Server reports the capture scan
+  done. After a restart that time is `null`: the offset restores the
+  transaction id but not the time. When the first poll finds a change, that
+  change ends the transaction with its own time and nothing fails. So the
+  failure needs a restart with no change waiting, and it races the first
+  heartbeat; it hit 4 of 5 such restarts in the drill. The code is the same in
+  3.6.3, 3.7.0.Final, and on main, so an upgrade does not help. The END was
+  emitted after the task restart in the drill runs (with the open rows sent
+  again, see the drill 1 entry), contrary to the first observation.
+- **Fix:** `connect-watchdog` restarts the task after exactly this failure
+  (the trace names `buildEndTransactionValue`), at most 3 times in 10
+  minutes. Any other failure, and a fourth one, stays failed and fires
+  `ConnectorNotRunning`. Checked: the task failed at 22:07:58 and was
+  restarted at 22:08:00; nothing was abandoned or dead-lettered. An upstream
+  report would let the watchdog go.
 
 ### 2026-10-29: Scenario 7 read only part of the business topic
 

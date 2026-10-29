@@ -26,6 +26,8 @@ public sealed class DebeziumParserTests
         Assert.Equal(2, change.TotalOrder);
         Assert.Equal("0000002e:000003c8:0006", change.CommitLsn);
         Assert.Equal("0000002e:000003c8:0004", change.ChangeLsn);
+        Assert.Equal(1, change.EventSerialNo);
+        Assert.Equal("HrCore.dbo.Salary@0000002e:000003c8:0004/1", change.SourcePosition);
         Assert.Equal(1793232531913, change.CommitTimestampMs);
     }
 
@@ -70,6 +72,7 @@ public sealed class DebeziumParserTests
         Assert.Null(change.TransactionId);
         Assert.Null(change.TotalOrder);
         Assert.Null(change.ChangeLsn);
+        Assert.Null(change.EventSerialNo);
         Assert.Equal("Hire", Assert.IsType<SalaryRow>(change.After).Reason);
     }
 

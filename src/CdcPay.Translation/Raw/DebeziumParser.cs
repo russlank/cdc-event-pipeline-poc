@@ -46,6 +46,7 @@ public static class DebeziumParser
                 Required(source, "ts_ms").GetInt64(),
                 RequiredString(source, "commit_lsn"),
                 OptionalString(source, "change_lsn"),
+                OptionalInt64(source, "event_serial_no"),
                 RequiredString(source, "snapshot") != "false",
                 hasTransaction ? RequiredString(transaction, "id") : null,
                 hasTransaction ? Required(transaction, "total_order").GetInt64() : null);
@@ -170,6 +171,9 @@ public static class DebeziumParser
 
     private static string? OptionalString(JsonElement element, string name) =>
         element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static long? OptionalInt64(JsonElement element, string name) =>
+        element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.Number ? value.GetInt64() : null;
 
     private static int Int(JsonElement element, string name) => Required(element, name).GetInt32();
 

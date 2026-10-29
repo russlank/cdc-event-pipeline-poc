@@ -8,9 +8,14 @@ namespace CdcPay.Translation.Assembly;
 /// when its END event has arrived and every per-table count it announces is met.
 /// Transactions are released in the order of their END events (commit order); a later
 /// complete transaction waits for an earlier incomplete one until that times out.
-/// Redelivery is expected (Debezium restarts its task and Kafka delivers at least once):
-/// a row repeated within a transaction, or a row or END of a recently released transaction,
-/// is a duplicate and is discarded. A row a released transaction never had is abandoned.
+/// Debezium emits a transaction's END only when the next transaction begins, so a transaction
+/// without END times out only once a later transaction's BEGIN has been seen: while Connect is
+/// down, the last transaction waits for as long as the outage lasts.
+/// Redelivery is expected, in two forms. Kafka delivers a message again (same total order):
+/// it is discarded. Debezium sends changes again after a task restart (same source position,
+/// next total order, and counted in the END): they count toward the END but are not handed
+/// out twice. A row or END of a recently released transaction is discarded; a row a released
+/// transaction never had is abandoned.
 /// Not thread-safe: one consumer loop owns it.
 /// </summary>
 public sealed class TransactionAssembler
@@ -21,7 +26,7 @@ public sealed class TransactionAssembler
     private readonly TimeSpan _timeout;
     private readonly Dictionary<string, OpenTransaction> _open = new(StringComparer.Ordinal);
     private readonly Queue<string> _endOrder = new();
-    private readonly Dictionary<string, HashSet<long>> _released = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, HashSet<string>> _released = new(StringComparer.Ordinal);
     private readonly Queue<string> _releasedOrder = new();
     private readonly List<AssemblerOutput> _ready = [];
 
@@ -46,22 +51,31 @@ public sealed class TransactionAssembler
             return;
         }
 
-        if (_released.TryGetValue(change.TransactionId, out HashSet<long>? releasedRows))
+        if (_released.TryGetValue(change.TransactionId, out HashSet<string>? releasedRows))
         {
-            _ready.Add(change.TotalOrder is { } order && releasedRows.Contains(order)
+            _ready.Add(releasedRows.Contains(change.SourcePosition)
                 ? new Discarded(change.Message.Position)
                 : new AbandonedTransaction(change.TransactionId, [change], null, "row that its already released transaction did not have"));
             return;
         }
 
         OpenTransaction transaction = GetOrOpen(change.TransactionId);
-        if (transaction.Rows.Any(row => row.TotalOrder == change.TotalOrder))
+        if (change.TotalOrder is { } order && !transaction.Orders.Add(order))
         {
             _ready.Add(new Discarded(change.Message.Position));
             return;
         }
 
-        transaction.Rows.Add(change);
+        transaction.Count(change);
+        if (transaction.Rows.Any(row => row.SourcePosition == change.SourcePosition))
+        {
+            _ready.Add(new Discarded(change.Message.Position));
+        }
+        else
+        {
+            transaction.Rows.Add(change);
+        }
+
         ReleaseCompleted();
     }
 
@@ -69,8 +83,15 @@ public sealed class TransactionAssembler
     {
         ArgumentNullException.ThrowIfNull(marker);
 
-        if (marker.Status == TransactionStatus.Begin || _released.ContainsKey(marker.TransactionId))
+        if (_released.ContainsKey(marker.TransactionId))
         {
+            _ready.Add(new Discarded(marker.Message.Position));
+            return;
+        }
+
+        if (marker.Status == TransactionStatus.Begin)
+        {
+            SupersedeEarlier(marker.TransactionId);
             _ready.Add(new Discarded(marker.Message.Position));
             return;
         }
@@ -107,10 +128,10 @@ public sealed class TransactionAssembler
             ReleaseCompleted();
         }
 
-        foreach (OpenTransaction orphan in _open.Values.Where(t => t.End is null && now - t.FirstSeenAt >= _timeout).ToList())
+        foreach (OpenTransaction orphan in _open.Values.Where(t => t.End is null && t.SupersededAt is { } superseded && now - superseded >= _timeout).ToList())
         {
             Close(orphan);
-            _ready.Add(new AbandonedTransaction(orphan.Id, orphan.Rows, null, $"no END event after {_timeout.TotalSeconds:0} s"));
+            _ready.Add(new AbandonedTransaction(orphan.Id, orphan.Rows, null, $"no END event {_timeout.TotalSeconds:0} s after a later transaction began"));
         }
     }
 
@@ -126,11 +147,28 @@ public sealed class TransactionAssembler
     {
         if (!_open.TryGetValue(id, out OpenTransaction? transaction))
         {
-            transaction = new OpenTransaction(id, _clock.GetUtcNow());
+            transaction = new OpenTransaction(id);
             _open[id] = transaction;
         }
 
         return transaction;
+    }
+
+    /// <summary>
+    /// A later transaction began: earlier open transactions without END start their timeout.
+    /// Debezium writes a transaction's END before the next BEGIN on the one-partition transaction
+    /// topic, so their END is overdue. Rows cannot tell this: rows of different tables arrive in
+    /// any order. SQL Server transaction ids are commit LSNs, which sort in commit order.
+    /// </summary>
+    private void SupersedeEarlier(string transactionId)
+    {
+        foreach (OpenTransaction other in _open.Values)
+        {
+            if (other.End is null && other.SupersededAt is null && string.CompareOrdinal(other.Id, transactionId) < 0)
+            {
+                other.SupersededAt = _clock.GetUtcNow();
+            }
+        }
     }
 
     private void ReleaseCompleted()
@@ -148,7 +186,7 @@ public sealed class TransactionAssembler
     private void Close(OpenTransaction transaction)
     {
         _ = _open.Remove(transaction.Id);
-        _released[transaction.Id] = [.. transaction.Rows.Select(row => row.TotalOrder ?? -1)];
+        _released[transaction.Id] = [.. transaction.Rows.Select(row => row.SourcePosition)];
         _releasedOrder.Enqueue(transaction.Id);
         if (_releasedOrder.Count > ReleasedToRemember)
         {
@@ -156,13 +194,21 @@ public sealed class TransactionAssembler
         }
     }
 
-    private sealed class OpenTransaction(string id, DateTimeOffset firstSeenAt)
+    private sealed class OpenTransaction(string id)
     {
+        private readonly Dictionary<string, long> _countedByDataCollection = new(StringComparer.Ordinal);
+        private long _counted;
+
         public string Id { get; } = id;
 
-        public DateTimeOffset FirstSeenAt { get; } = firstSeenAt;
+        /// <summary>When a message of a later transaction arrived while this one had no END.</summary>
+        public DateTimeOffset? SupersededAt { get; set; }
 
+        /// <summary>Distinct changes, without the ones Debezium sent again.</summary>
         public List<RawChange> Rows { get; } = [];
+
+        /// <summary>Every total order seen: what the END counts.</summary>
+        public HashSet<long> Orders { get; } = [];
 
         public TransactionMarker? End { get; set; }
 
@@ -170,13 +216,20 @@ public sealed class TransactionAssembler
 
         public bool IsComplete =>
             End is not null
-            && (End.EventCount is null || Rows.Count == End.EventCount)
+            && (End.EventCount is null || _counted == End.EventCount)
             && End.EventCountsByDataCollection.All(expected =>
-                Rows.Count(row => row.DataCollection == expected.Key) == expected.Value);
+                _countedByDataCollection.GetValueOrDefault(expected.Key) == expected.Value);
+
+        /// <summary>Counts a change toward the END, also one Debezium sent again.</summary>
+        public void Count(RawChange change)
+        {
+            _counted++;
+            _countedByDataCollection[change.DataCollection] = _countedByDataCollection.GetValueOrDefault(change.DataCollection) + 1;
+        }
 
         public string Describe() =>
             End is null
                 ? $"{Rows.Count} rows, no END"
-                : $"{Rows.Count} of {End.EventCount} rows";
+                : $"{_counted} of {End.EventCount} rows";
     }
 }

@@ -134,7 +134,7 @@ From the translator (raw CDC topics):
 | `InvalidCorrection` | a correction that changes another column, changes nothing, or shares its transaction with other changes |
 | `UnsupportedChange` | a delete, a row moved to another employee, or an untranslated table (legitimate deletes such as erasure requests would need a dedicated event) |
 | `UnclassifiedTransaction` | rows that match none of the shapes above |
-| `IncompleteTransaction` | a transaction still incomplete after the timeout (default 60 s), or a row that its already released transaction did not have |
+| `IncompleteTransaction` | a transaction still incomplete 60 s (the default timeout) after its END, or without END 60 s after a later transaction began; or a row that its already released transaction did not have |
 
 From the projector (`hr.employee-pay.v1`; the message's own headers are kept as well):
 

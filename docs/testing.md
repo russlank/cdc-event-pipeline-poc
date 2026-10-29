@@ -63,7 +63,8 @@ when its cause is produced and removed ([monitoring.md](monitoring.md)).
 Operations have their own checks: `scripts/ops/replay-projector.sh` compares
 the read-model checksum before and after a rebuild, and
 `scripts/checks/backfill-while-streaming.sh` runs a backfill with a
-concurrent change.
+concurrent change. Failure drills are in `scripts/drills/`
+([operations.md](operations.md)).
 
 ## Conventions
 

@@ -35,6 +35,14 @@ readmodel_checksum() {
   readmodel_sql "$(cat scripts/checks/readmodel-checksum.sql)"
 }
 
+# readmodel_divergence: prints the Salary rows of HrCore without a current pay_history row ("<"
+# lines) and the current pay_history rows without a Salary row (">" lines); nothing when the read
+# model matches the source. Rows dead-lettered on purpose (scenario 7) show up here too.
+readmodel_divergence() {
+  diff <(sql_rows "$(cat scripts/checks/source-salary-rows.sql)" | LC_ALL=C sort) \
+       <(readmodel_sql "$(cat scripts/checks/readmodel-current-rows.sql)" | LC_ALL=C sort) || true
+}
+
 # kafka_groups <args...>: runs kafka-consumer-groups.sh against the broker.
 kafka_groups() {
   docker compose exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 "$@"

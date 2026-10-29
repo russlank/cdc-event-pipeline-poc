@@ -90,17 +90,97 @@ public sealed class TransactionAssemblerTests
     }
 
     [Fact]
-    public void ExpireStale_WithRowsButNoEnd_AbandonsOrphans()
+    public void ExpireStale_WithRowsButNoEndAfterLaterTransaction_AbandonsOrphans()
     {
-        RawChange orphan = Create(Salary(200, 30000m, Nov), "t9", 1);
+        RawChange orphan = Create(Salary(200, 30000m, Nov), "t1", 1);
         _assembler.Accept(orphan);
+        _clock.Advance(TimeSpan.FromSeconds(30));
+        _assembler.Accept(Begin("t2"));
 
-        _clock.Advance(TimeSpan.FromSeconds(61));
+        _clock.Advance(TimeSpan.FromSeconds(59));
+        _assembler.ExpireStale();
+        Assert.All(_assembler.Drain(), output => Assert.IsType<Discarded>(output));
+
+        _clock.Advance(TimeSpan.FromSeconds(1));
         _assembler.ExpireStale();
 
         AbandonedTransaction abandoned = Assert.IsType<AbandonedTransaction>(Assert.Single(_assembler.Drain()));
         Assert.Equal([orphan], abandoned.Rows);
         Assert.Null(abandoned.End);
+    }
+
+    [Fact]
+    public void ExpireStale_WithRowsButNoEndAndNothingLater_KeepsWaiting()
+    {
+        // Debezium emits the END when the next transaction begins; while Connect is down, none does.
+        RawChange raise = Create(Salary(200, 30000m, Nov), "t1", 1);
+        _assembler.Accept(raise);
+
+        _clock.Advance(TimeSpan.FromMinutes(30));
+        _assembler.ExpireStale();
+        Assert.Empty(_assembler.Drain());
+
+        _assembler.Accept(End("t1", raise));
+
+        Assert.Equal([raise], Assert.IsType<CompletedTransaction>(Assert.Single(_assembler.Drain())).Rows);
+    }
+
+    [Fact]
+    public void ExpireStale_WithEarlierTransactionArrivingLate_KeepsWaiting()
+    {
+        // Observed when Connect stopped right after a raise: the heartbeat row of the transaction
+        // before it arrived after the raise's BEGIN and rows. That is not a later transaction.
+        RawChange heartbeat = Update(Other("DebeziumHeartbeat"), Other("DebeziumHeartbeat"), "t1", 1);
+        RawChange raise = Create(Salary(200, 30000m, Nov), "t2", 1);
+        _assembler.Accept(Begin("t1"));
+        _assembler.Accept(End("t1", heartbeat));
+        _assembler.Accept(Begin("t2"));
+        _assembler.Accept(raise);
+        _assembler.Accept(heartbeat);
+        _assembler.Accept(Begin("t1"));
+
+        _clock.Advance(TimeSpan.FromMinutes(5));
+        _assembler.ExpireStale();
+
+        Assert.Empty(_assembler.Drain().OfType<AbandonedTransaction>());
+        Assert.Equal(1, _assembler.OpenTransactionCount);
+    }
+
+    [Fact]
+    public void Accept_WithChangesResentByDebezium_CountsThemTowardEndOnce()
+    {
+        // Observed after a Connect restart: Debezium sends the rows of the open transaction again
+        // with the next total orders, and its END counts both sends.
+        RawChange close = Update(Salary(113, 37389m, May), Salary(113, 37389m, May, Nov), "t1", 1);
+        RawChange raise = Create(Salary(114, 38137m, Nov), "t1", 2);
+        RawChange closeAgain = Resent(close, 3);
+        RawChange raiseAgain = Resent(raise, 4);
+
+        _assembler.Accept(close);
+        _assembler.Accept(raise);
+        _assembler.Accept(closeAgain);
+        _assembler.Accept(raiseAgain);
+        _assembler.Accept(End("t1", close, raise, closeAgain, raiseAgain));
+
+        IReadOnlyList<AssemblerOutput> outputs = _assembler.Drain();
+        Assert.Equal(
+            [closeAgain.Message.Position, raiseAgain.Message.Position],
+            outputs.OfType<Discarded>().Select(discarded => discarded.Position));
+        Assert.Equal([close, raise], Assert.Single(outputs.OfType<CompletedTransaction>()).Rows);
+        Assert.Equal(0, _assembler.OpenTransactionCount);
+    }
+
+    [Fact]
+    public void Accept_WithChangesResentAfterRelease_DiscardsThem()
+    {
+        RawChange raise = Create(Salary(114, 38137m, Nov), "t1", 1);
+        _assembler.Accept(raise);
+        _assembler.Accept(End("t1", raise));
+        _ = Assert.IsType<CompletedTransaction>(Assert.Single(_assembler.Drain()));
+
+        _assembler.Accept(Resent(raise, 2));
+
+        _ = Assert.IsType<Discarded>(Assert.Single(_assembler.Drain()));
     }
 
     [Fact]

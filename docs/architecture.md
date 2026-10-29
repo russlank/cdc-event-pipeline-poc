@@ -44,7 +44,7 @@ flowchart LR
 |---|---|---|
 | Source database | SQL Server 2022 Developer with Agent | `db/` |
 | Broker | Apache Kafka, single node, KRaft | `docker-compose.yml` |
-| CDC | Kafka Connect + Debezium SQL Server connector | `connect/` |
+| CDC | Kafka Connect + Debezium SQL Server connector; a watchdog that restarts the task after one known Debezium failure | `connect/` |
 | Contracts | Avro in Confluent Schema Registry | `contracts/` |
 | Event Translator | .NET 10 worker | `src/CdcPay.EventTranslator`, `src/CdcPay.Translation` |
 | Pay History Projector | .NET 10 worker | `src/CdcPay.PayHistoryProjector`, `src/CdcPay.PayHistory` |
@@ -72,7 +72,7 @@ Prometheus; Connect and Kafka are scraped directly. See
 | Part | Role |
 |---|---|
 | `Raw/DebeziumParser` | Debezium JSON to typed rows and transaction markers |
-| `Assembly/TransactionAssembler` | groups rows by transaction, releases complete transactions in commit order, times out incomplete ones |
+| `Assembly/TransactionAssembler` | groups rows by transaction, releases complete transactions in commit order, times out incomplete ones, drops redelivered rows |
 | `Assembly/OffsetTracker` | per partition, the lowest offset still in progress: the safe commit point |
 | `Classification/EventClassifier` | complete transaction or snapshot row to events, ignored rows, or dead letters |
 
@@ -81,6 +81,15 @@ assembles, classifies, publishes, and commits. Offsets are committed only after
 the output of every earlier message is acknowledged; a publish failure stops
 the host, and on restart it resumes from the committed offsets. Because event
 ids are deterministic, any duplicate this produces is recognisable downstream.
+
+Debezium writes a transaction's END only when the next transaction begins. A
+transaction without END therefore times out only after a later transaction's
+BEGIN: while Connect is down, the last transaction waits for the whole outage.
+After a task restart, Debezium sends the rows of the transaction that was open
+again, with new `total_order` values, and its END counts both sends. The
+assembler recognises such a row by its source position (`change_lsn` and
+`event_serial_no`), counts it toward the END, and does not hand it out twice.
+A row Kafka delivers again (same `total_order`) is dropped.
 
 
 ## Pay History Projector and Query API
@@ -122,7 +131,7 @@ queries with a read-only login. Details: [read-model.md](read-model.md).
 ```text
 docker-compose.yml   local stack
 db/                  source schema, seed data, CDC enablement
-connect/             Debezium connector configuration and registration
+connect/             Connect image, Debezium connector configuration and registration, task watchdog
 contracts/           event schemas
 monitoring/          Prometheus, Grafana, Alertmanager
 scripts/             demo scenarios, operations, failure drills

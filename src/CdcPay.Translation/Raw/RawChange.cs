@@ -22,12 +22,19 @@ public sealed record RawChange(
     long CommitTimestampMs,
     string CommitLsn,
     string? ChangeLsn,
+    long? EventSerialNo,
     bool Snapshot,
     string? TransactionId,
     long? TotalOrder)
 {
     /// <summary>"HrCore.dbo.Salary": the name used in transaction END event counts.</summary>
     public string DataCollection => $"{Database}.{Schema}.{Table}";
+
+    /// <summary>
+    /// Where the change is in the source log. A change Debezium sends again after a task restart
+    /// has the same source position but a new <see cref="TotalOrder"/>.
+    /// </summary>
+    public string SourcePosition => $"{DataCollection}@{ChangeLsn ?? CommitLsn}/{EventSerialNo}";
 
     /// <summary>"dbo.Salary".</summary>
     public string QualifiedTable => $"{Schema}.{Table}";

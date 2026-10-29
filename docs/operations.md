@@ -77,6 +77,18 @@ Settings that matter:
 | `decimal.handling.mode=string` | amounts arrive as exact decimal strings |
 | `tombstones.on.delete=false` | deletes are one event with the before image |
 
+After a Connect restart, Debezium 3.6.2 fails its task when the first poll
+finds no new change (`NullPointerException` in `buildEndTransactionValue`; the
+code is the same in 3.7.0). `connect-watchdog` (`connect/watchdog.py`) checks
+the task every 10 s and restarts it after exactly this failure, at most 3
+times in 10 minutes; any other failure it leaves alone, and
+`ConnectorNotRunning` fires. Its log has one line per restart:
+
+```sh
+docker compose logs connect-watchdog
+# 2026-10-29T22:08:00Z restarted task 0 of hrcore-cdc after the known END-timestamp failure (1 in 600 s)
+```
+
 ## Services and Scenarios
 
 Each .NET service serves `/health/live`, `/health/ready`, and
@@ -181,6 +193,35 @@ no-op. A backfill adds no `pay_history` rows.
 raise while the snapshot runs and checks that the raise is published before
 the snapshot finishes. It then checks that every row recorded since the
 start belongs to the raise.
+
+## Failure Drills
+
+Each drill script sets up a failure, observes it, and checks the outcome;
+results are in [journal.md](journal.md). Run them on a caught-up stack while
+the source is otherwise quiet.
+
+```sh
+bash scripts/drills/01-connect-restart.sh   # Connect stopped mid-transaction, changes made, restarted
+```
+
+Drill 1 commits a raise and stops Connect as soon as Debezium has sent its
+rows, makes four more raises while Connect is down (120 s, `DOWN_SECONDS`),
+and starts it again. It passes when Debezium resumes from the offset stored at
+the stop, the five events are applied once, nothing is dead-lettered, and the
+read model matches the source as before. It compares the source with the read
+model row by row (`readmodel_divergence` in `scripts/scenarios/lib.sh`):
+every `Salary` row needs exactly one current `pay_history` row. Scenario 7's
+rejected row is the expected difference.
+
+### Repairing a Read Model That Misses a Transaction
+
+A transaction that was dead-lettered as `IncompleteTransaction` is missing
+from the read model, and so is every later change it would have preceded.
+Repair it with a backfill of the table (`scripts/ops/backfill.sh Salary`):
+the snapshot events state every row as it is now, and the merge corrects the
+history. Replaying the raw topics is not a repair: it publishes the missing
+transaction after the later changes of the same employee, and the merge then
+replaces their open period.
 
 ## Contracts
 

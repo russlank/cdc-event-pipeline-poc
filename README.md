@@ -84,7 +84,7 @@ newer one existed (for example Debezium 3.7.0 was one day old).
 | Alertmanager | `prom/alertmanager:v0.34.1` |
 | Grafana | `grafana/grafana:13.2.3` |
 | kafka-exporter | `danielqsj/kafka-exporter:v1.10.0` |
-| Alert sink | `python:3.13.16-alpine3.23` |
+| Alert sink, Connect watchdog | `python:3.13.16-alpine3.23` |
 | OpenTelemetry .NET | 1.19.1 (instrumentation 1.19.0); 1.20.1 was under two weeks old |
 | .NET SDK and runtime | 10.0.402; images `mcr.microsoft.com/dotnet/sdk:10.0.402-noble`, `aspnet:10.0.14-noble` |
 | avrogen | `Apache.Avro.Tools` 1.12.2 (`dotnet-tools.json`) |
