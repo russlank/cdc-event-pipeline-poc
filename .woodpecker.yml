@@ -4,15 +4,17 @@
 when:
   - event: [push, pull_request, manual]
 
-# Woodpecker stops the services with SIGTERM when the steps are done. The JVMs (Kafka, Schema
-# Registry) then exit with 143 (128 + SIGTERM) after a clean shutdown, so their exit code says
-# nothing about the pipeline: `failure: ignore`. The steps alone decide the result.
+# Woodpecker stops the services with SIGTERM when the steps are done. A JVM exits with 143
+# (128 + SIGTERM) even after a clean shutdown, and Woodpecker marks the service failed;
+# `failure: ignore` does not apply to services. So Kafka and Schema Registry run their image's
+# start script under a shell that forwards SIGTERM, waits for the clean shutdown, and exits 0.
+# ($$ is a literal $ for the shell: Woodpecker substitutes $NAME itself.)
 services:
   # Single-node Kafka for the Schema Registry and the integration tests; settings as in
   # docker-compose.yml.
   kafka:
     image: apache/kafka:4.3.2
-    failure: ignore
+    entrypoint: ["/bin/bash", "-c", "/etc/kafka/docker/run & pid=$$!; trap 'kill -TERM $$pid; wait $$pid; exit 0' TERM; wait $$pid"]
     environment:
       CLUSTER_ID: QTEGCfpKUmmNZpjgXb67cA
       KAFKA_NODE_ID: "1"
@@ -29,7 +31,7 @@ services:
       KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
   schema-registry:
     image: confluentinc/cp-schema-registry:8.3.2
-    failure: ignore
+    entrypoint: ["/bin/bash", "-c", "/etc/confluent/docker/run & pid=$$!; trap 'kill -TERM $$pid; wait $$pid; exit 0' TERM; wait $$pid"]
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081

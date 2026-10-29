@@ -83,6 +83,11 @@ and fix, newest first. Failure drills add their results here as well.
   looked fine.
 - **Fix:** `failure: ignore` on the two services, as Woodpecker's services
   documentation suggests; the steps alone decide the result.
+- **Update:** that did not work: the next run still marked both services
+  failed with 143. Each service now runs its image's start script under
+  `bash -c` that traps SIGTERM, forwards it to the JVM, waits, and exits 0.
+  Checked with `docker stop`: Kafka exits 0 with the wrapper, 143 without;
+  Schema Registry exits 0; both log a clean shutdown.
 
 ### 2026-10-29: The first read-model design would have mixed pay components
 
