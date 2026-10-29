@@ -43,11 +43,13 @@ jobs:
       - uses: actions/checkout@v7.0.1
 
       - name: Start Kafka and Schema Registry
-        # The compose file requires these variables; no SQL Server or PostgreSQL is started here.
+        # Compose checks every required variable of the file, also for services it does not
+        # start; no SQL Server, PostgreSQL, or Grafana is started here.
         env:
           MSSQL_SA_PASSWORD: unused-in-this-job-1A!
           POSTGRES_PASSWORD: unused-in-this-job
           PAYQUERY_DB_PASSWORD: unused-in-this-job
+          GRAFANA_ADMIN_PASSWORD: unused-in-this-job
         run: docker compose --progress quiet up -d --wait kafka schema-registry
 
       - name: Contract compatibility
