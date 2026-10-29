@@ -11,6 +11,45 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: Debezium snapshot blocks every update of existing rows
+
+- **Symptom:** the first raw-CDC smoke test hung. The heartbeat topic stayed
+  at one message although the connector was `RUNNING`.
+- **Cause:** `sys.dm_exec_requests` showed two `UPDATE`s waiting on
+  `LCK_M_X`, blocked by a Debezium JDBC session at isolation level
+  REPEATABLE READ with an open transaction holding shared key locks on every
+  row of every snapshotted table. The default `snapshot.isolation.mode`
+  (`repeatable_read`) left the snapshot transaction open after the snapshot,
+  so its locks were never released. Debezium's own heartbeat update was
+  blocked the same way, so the heartbeat was silent: the very signal meant
+  to detect stalled capture was itself stalled.
+- **Fix:** `ALLOW_SNAPSHOT_ISOLATION ON` for `HrCore` (`db/schema.sql`) and
+  `"snapshot.isolation.mode": "snapshot"` in the connector: a consistent
+  snapshot from row versions without shared locks. After a reset: no key
+  locks held by Debezium sessions, no blocked requests, heartbeat updated
+  every 10 s, smoke test completes.
+- **Lesson:** check `sys.dm_exec_requests` for blocking before blaming CDC
+  latency; a running connector can still be stuck.
+
+### 2026-10-29: `docker compose up --wait` fails on init jobs
+
+- **Symptom:** `docker compose up -d --wait` exited 1 with
+  `container cdc-pay-kafka-init-1 exited (0)` while every service was healthy.
+- **Cause:** `--wait` expects every container to stay running; a one-shot
+  job that completes successfully counts as a failure.
+- **Fix:** `scripts/stack-up.sh` starts the stack, checks each init job's exit
+  code with `docker wait`, then waits for the health checks of the
+  long-running services.
+
+### 2026-10-29: Git Bash rewrites container paths
+
+- **Symptom:** `docker compose exec kafka /opt/kafka/bin/kafka-topics.sh ...`
+  failed with `stat C:/Program Files/Git/opt/kafka/bin/kafka-topics.sh`.
+- **Cause:** Git Bash (MSYS) converts arguments that look like POSIX paths to
+  Windows paths before calling `docker`.
+- **Fix:** `export MSYS_NO_PATHCONV=1` before such commands (documented in
+  `docs/operations.md`).
+
 ### 2026-10-29: Empty test project fails the test run
 
 - **Symptom:** `dotnet test` exited with code 8 although every test passed.

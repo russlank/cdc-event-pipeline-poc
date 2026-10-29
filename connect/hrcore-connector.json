@@ -1,0 +1,40 @@
+{
+  "name": "hrcore-cdc",
+  "config": {
+    "connector.class": "io.debezium.connector.sqlserver.SqlServerConnector",
+    "tasks.max": "1",
+
+    "database.hostname": "sqlserver",
+    "database.port": "1433",
+    "database.user": "sa",
+    "database.password": "${env:MSSQL_SA_PASSWORD}",
+    "database.names": "HrCore",
+    "database.encrypt": "false",
+
+    "topic.prefix": "cdc",
+    "table.include.list": "dbo.Tenant,dbo.Employee,dbo.Position,dbo.Salary,dbo.DebeziumSignal,dbo.DebeziumHeartbeat",
+    "snapshot.mode": "initial",
+    "snapshot.isolation.mode": "snapshot",
+
+    "provide.transaction.metadata": "true",
+    "signal.data.collection": "HrCore.dbo.DebeziumSignal",
+    "heartbeat.interval.ms": "10000",
+    "heartbeat.action.query": "UPDATE HrCore.dbo.DebeziumHeartbeat SET LastBeat = SYSUTCDATETIME() WHERE Id = 1",
+
+    "decimal.handling.mode": "string",
+    "tombstones.on.delete": "false",
+    "include.schema.changes": "false",
+
+    "schema.history.internal.kafka.bootstrap.servers": "kafka:9092",
+    "schema.history.internal.kafka.topic": "_schema-history.hrcore",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": "false",
+
+    "topic.creation.default.replication.factor": "1",
+    "topic.creation.default.partitions": "1",
+    "topic.creation.default.retention.ms": "-1"
+  }
+}

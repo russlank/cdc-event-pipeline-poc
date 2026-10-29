@@ -24,7 +24,7 @@ queries, replay, idempotency, and monitoring. Synthetic HR/pay data only.
 
 ```sh
 cp .env.example .env          # then set MSSQL_SA_PASSWORD
-docker compose up -d --wait   # SQL Server, Kafka, Connect, Schema Registry, Kafka UI
+scripts/stack-up.sh          # SQL Server with CDC, Kafka, Debezium, Schema Registry, Kafka UI
 cd src && dotnet test ./CdcPay.slnx -c Release
 ```
 

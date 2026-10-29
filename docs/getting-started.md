@@ -24,17 +24,18 @@ Run the stack locally and check that it works.
    # edit .env and set a strong MSSQL_SA_PASSWORD
    ```
 
-2. Start the stack and wait until every service is healthy:
+2. Start the stack and wait until the init jobs are done and every service
+   is healthy:
 
    ```sh
-   docker compose up -d --wait
+   scripts/stack-up.sh
    ```
 
 3. Check the services:
 
    ```sh
    docker compose ps
-   curl -s http://localhost:8083/connectors?expand=status   # Kafka Connect
+   curl -s 'http://localhost:8083/connectors?expand=status'  # connector hrcore-cdc RUNNING
    curl -s http://localhost:8081/subjects                  # Schema Registry
    ```
 
