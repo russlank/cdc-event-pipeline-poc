@@ -204,6 +204,7 @@ the source is otherwise quiet.
 bash scripts/drills/01-connect-restart.sh   # Connect stopped mid-transaction, changes made, restarted
 bash scripts/drills/02-agent-stopped.sh     # SQL Server Agent stopped, changes made, started
 bash scripts/drills/03-retention-exceeded.sh  # Connect down past the CDC retention, re-snapshot
+bash scripts/drills/04-projector-killed.sh  # projector killed (SIGKILL) while it works through a backlog
 ```
 
 Drill 1 commits a raise and stops Connect as soon as Debezium has sent its
@@ -229,6 +230,14 @@ read. It passes when the gap check reports the gap, the restarted task fails
 and stays failed, nothing is applied, and the re-snapshot restores the read
 model without dead-lettering a transaction. The retention is set back to
 4320 minutes at the end, also when the drill fails.
+
+Drill 4 stops the projector, builds a backlog of raise events (15 rounds for
+3001..3012, `ROUNDS`), starts the projector, and kills it with `SIGKILL` as
+soon as it has applied some of them. It passes when, after the restart, every
+event is applied once, the read model matches the source, nothing is
+dead-lettered, and `scripts/ops/replay-projector.sh` rebuilds an identical
+history. `docker compose kill` does not trigger the restart policy, so the
+drill starts the projector itself.
 
 ### Connector Down Longer Than the CDC Retention
 

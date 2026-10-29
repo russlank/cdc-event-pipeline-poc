@@ -11,6 +11,31 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-30: Drill 4, projector killed mid-backlog
+
+- **Setup:** projector stopped; 15 rounds of raises for 3001..3012 gave a
+  backlog of 165 events on `hr.employee-pay.v1` (11 per round: one of the
+  12 employees has no open salary period). Projector started, killed with
+  `docker compose kill -s SIGKILL` once it had applied some events, started
+  again: `bash scripts/drills/04-projector-killed.sh`.
+- **What happened:** the kill came when 147 of the 165 events were in the
+  read model, but the committed offsets were still at the start of the
+  backlog (lag 60 + 75 + 30 = 165): the projector commits stored offsets
+  every second, and it had applied the 147 in less than that. After the
+  restart all 147 were delivered again and skipped as duplicates
+  (`processed_event`), the other 18 applied: 165 events applied in total,
+  read model equal to the source as before, nothing dead-lettered.
+  `scripts/ops/replay-projector.sh` then rebuilt the read model from offset
+  0 with an identical checksum (`514 events, 623 rows`), so no history row is
+  duplicated or missing either.
+- **Cause and conclusion:** no fix needed. An event and its `processed_event`
+  row commit in one PostgreSQL transaction; a kill before the commit leaves
+  nothing, a kill after it leaves a row that makes the redelivery a no-op. At
+  most about a second of work is redone after a crash.
+- **Drill script lessons:** the first runs used 36 events and missed: the
+  projector applied 26 of 33 before the first check saw any, so the backlog
+  is now 165 by default and measured once publishing stops, not computed.
+
 ### 2026-10-29: Drill 3, connector down longer than the CDC retention
 
 - **Setup:** Connect stopped; raises for 3001 and 3002 committed; cleanup
