@@ -35,10 +35,11 @@ also means `dotnet format` finds nothing. Tests run on Microsoft.Testing.Platfor
 
 | Project | Scope |
 |---|---|
-| `CdcPay.UnitTests` | pure logic and in-memory host tests (`WebApplicationFactory`) |
+| `CdcPay.UnitTests` | pure logic and in-memory host tests (`WebApplicationFactory`): identity, event ids, Debezium parsing (fixtures recorded from the real connector in `Translation/Fixtures`), transaction assembly, offsets, every classification rule, Avro round trips, contract drift |
 
 Integration tests against Kafka, Schema Registry, and PostgreSQL
-(Testcontainers) join with the projector.
+(Testcontainers) join with the projector. End-to-end checks against the
+running stack are the scenario scripts in `scripts/scenarios/`.
 
 ## Conventions
 

@@ -54,7 +54,7 @@ Run the stack locally and check that it works.
 | Service | Address |
 |---|---|
 | SQL Server | `localhost,1433` (user `sa`, password from `.env`) |
-| Kafka (from the host) | `localhost:29092` |
+| Kafka (from the host) | `127.0.0.1:29092` |
 | Kafka Connect REST | <http://localhost:8083> |
 | Schema Registry | <http://localhost:8081> |
 | Kafka UI | <http://localhost:8080> |

@@ -30,7 +30,19 @@ csharp_style_prefer_primary_constructors = true
 dotnet_diagnostic.IDE0022.severity = none
 # Fluent builder calls return values that are deliberately ignored.
 dotnet_diagnostic.IDE0058.severity = none
+# Readability calls left to the author: listing every case beside a default or discard arm
+# (IDE0010, IDE0072), and turning if/return blocks into conditional expressions (IDE0045, IDE0046).
+dotnet_diagnostic.IDE0010.severity = none
+dotnet_diagnostic.IDE0072.severity = none
+dotnet_diagnostic.IDE0045.severity = none
+dotnet_diagnostic.IDE0046.severity = none
 
 # Test names follow Method_State_ExpectedBehavior, which needs underscores.
 [src/CdcPay.*Tests/**.cs]
 dotnet_diagnostic.CA1707.severity = none
+# Tests hold deliberately malformed JSON as plain strings.
+dotnet_diagnostic.JSON002.severity = none
+
+# avrogen output (contracts/scripts/generate-csharp.sh): not hand-written, not analyzed.
+[src/CdcPay.Contracts/Generated/**.cs]
+generated_code = true

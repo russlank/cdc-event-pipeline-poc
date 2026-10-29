@@ -10,10 +10,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-jobs=(db-init kafka-init connect-init)
-services=(sqlserver kafka schema-registry connect kafka-ui)
+jobs=(db-init kafka-init connect-init schemas-init)
+services=(sqlserver kafka schema-registry connect kafka-ui event-translator)
 
-docker compose up -d
+# Build identity for the .NET images.
+SOURCE_REVISION_ID=$(git rev-parse HEAD 2>/dev/null || true)
+SOURCE_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+REPOSITORY_URL=$(git remote get-url origin-public 2>/dev/null || git remote get-url origin 2>/dev/null || true)
+export SOURCE_REVISION_ID SOURCE_BRANCH REPOSITORY_URL
+
+docker compose --progress quiet up -d --build
 
 for job in "${jobs[@]}"; do
   container=$(docker compose ps -aq "$job")
@@ -26,5 +32,5 @@ for job in "${jobs[@]}"; do
   echo "$job completed"
 done
 
-docker compose up -d --wait "${services[@]}"
+docker compose --progress quiet up -d --wait "${services[@]}"
 docker compose ps

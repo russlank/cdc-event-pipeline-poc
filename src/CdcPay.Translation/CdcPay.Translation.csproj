@@ -4,4 +4,9 @@
     <TargetFramework>$(AppTargetFramework)</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\CdcPay.Common\CdcPay.Common.csproj" />
+    <ProjectReference Include="..\CdcPay.Contracts\CdcPay.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>

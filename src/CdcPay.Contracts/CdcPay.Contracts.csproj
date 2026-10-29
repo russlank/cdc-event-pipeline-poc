@@ -4,4 +4,13 @@
     <TargetFramework>$(AppTargetFramework)</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Apache.Avro" />
+  </ItemGroup>
+
+  <!-- The contract schema ships with the assembly so consumers and tests can compare against it. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\contracts\avro\v1\PayEvent.avsc" LogicalName="contracts.avro.v1.PayEvent.avsc" />
+  </ItemGroup>
+
 </Project>

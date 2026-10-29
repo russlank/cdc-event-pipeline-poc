@@ -1,7 +1,8 @@
 using CdcPay.Common.Hosting;
+using CdcPay.EventTranslator;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-builder.AddServiceDefaults(typeof(Program).Assembly);
+builder.AddEventTranslator();
 
 WebApplication app = builder.Build();
 app.MapServiceEndpoints();

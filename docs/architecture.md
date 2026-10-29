@@ -53,7 +53,27 @@ flowchart LR
 
 Every .NET host serves `/health/live` (process only), `/health/ready`
 (dependencies), and `/system/component-identity` (component, version, commit,
-branch), and logs one identity line at startup.
+branch), and logs one identity line at startup. The hosts run in compose from
+multi-stage images as a non-root user; the build identity is passed as build
+arguments by `scripts/stack-up.sh`.
+
+## Event Translator
+
+`src/CdcPay.Translation` holds the logic, with no Kafka dependency:
+
+| Part | Role |
+|---|---|
+| `Raw/DebeziumParser` | Debezium JSON to typed rows and transaction markers |
+| `Assembly/TransactionAssembler` | groups rows by transaction, releases complete transactions in commit order, times out incomplete ones |
+| `Assembly/OffsetTracker` | per partition, the lowest offset still in progress: the safe commit point |
+| `Classification/EventClassifier` | complete transaction or snapshot row to events, ignored rows, or dead letters |
+
+`src/CdcPay.EventTranslator` is the host: one consumer loop that polls, parses,
+assembles, classifies, publishes, and commits. Offsets are committed only after
+the output of every earlier message is acknowledged; a publish failure stops
+the host, and on restart it resumes from the committed offsets. Because event
+ids are deterministic, any duplicate this produces is recognisable downstream.
+
 
 ## Design Decisions
 

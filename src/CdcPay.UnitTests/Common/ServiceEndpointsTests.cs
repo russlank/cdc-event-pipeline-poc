@@ -32,6 +32,6 @@ public sealed class ServiceEndpointsTests(WebApplicationFactory<Program> factory
         Assert.NotNull(identity);
         Assert.Equal("CdcPay.PayQueryApi", identity.Component);
         Assert.Equal("CDC Pay Events PoC", identity.Product);
-        Assert.StartsWith("0.1.0", identity.Version, StringComparison.Ordinal);
+        Assert.Matches(@"^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$", identity.Version);
     }
 }

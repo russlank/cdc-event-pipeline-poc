@@ -1,0 +1,12 @@
+# Build context: only src/ and contracts/ are copied into images.
+**/bin/
+**/obj/
+**/.vs/
+**/TestResults/
+.git/
+.env
+docs/
+db/
+connect/
+monitoring/
+scripts/

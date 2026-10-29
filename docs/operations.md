@@ -65,6 +65,40 @@ Settings that matter:
 | `decimal.handling.mode=string` | amounts arrive as exact decimal strings |
 | `tombstones.on.delete=false` | deletes are one event with the before image |
 
+## Event Translator and Scenarios
+
+```sh
+curl -s http://127.0.0.1:5101/health/ready
+curl -s http://127.0.0.1:5101/system/component-identity
+bash scripts/scenarios/01-initial-snapshot.sh      # every seeded employee as EmployeeHired
+bash scripts/scenarios/02-raise-next-month.sh      # SalaryChanged, not retroactive
+bash scripts/scenarios/05-hire-one-transaction.sh  # one EmployeeHired from three tables
+```
+
+Each scenario runs its `.sql` file (safe to rerun) and checks the events.
+Business events decoded through the registry:
+
+```sh
+docker compose exec schema-registry kafka-avro-console-consumer \
+  --bootstrap-server kafka:9092 --topic hr.employee-pay.v1 --from-beginning \
+  --property schema.registry.url=http://localhost:8081 --property print.key=true \
+  --key-deserializer org.apache.kafka.common.serialization.StringDeserializer
+```
+
+Dead letters with their headers:
+
+```sh
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 \
+  --topic hr.dlq --from-beginning --formatter-property print.headers=true
+```
+
+## Contracts
+
+`schemas-init` runs `contracts/scripts/register-schema.sh`: it sets
+`FULL_TRANSITIVE` on `hr.employee-pay.v1-value` and registers
+`contracts/avro/v1/PayEvent.avsc`. After changing the schema, regenerate the C#
+classes with `bash contracts/scripts/generate-csharp.sh`.
+
 ## Topics
 
 `kafka-init` creates `hr.employee-pay.v1` (3 partitions) and `hr.dlq`

@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
 
@@ -18,6 +19,11 @@
   <ItemGroup>
     <ProjectReference Include="..\CdcPay.Common\CdcPay.Common.csproj" />
     <ProjectReference Include="..\CdcPay.PayQueryApi\CdcPay.PayQueryApi.csproj" />
+    <ProjectReference Include="..\CdcPay.Translation\CdcPay.Translation.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Translation\Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

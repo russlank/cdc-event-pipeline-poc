@@ -24,8 +24,8 @@ queries, replay, idempotency, and monitoring. Synthetic HR/pay data only.
 
 ```sh
 cp .env.example .env          # then set MSSQL_SA_PASSWORD
-scripts/stack-up.sh          # SQL Server with CDC, Kafka, Debezium, Schema Registry, Kafka UI
-cd src && dotnet test ./CdcPay.slnx -c Release
+scripts/stack-up.sh          # SQL Server with CDC, Kafka, Debezium, Schema Registry, Kafka UI, translator
+bash scripts/scenarios/05-hire-one-transaction.sh   # a hire becomes one EmployeeHired event
 ```
 
 Details: [docs/getting-started.md](docs/getting-started.md).
@@ -73,7 +73,8 @@ newer one existed (for example Debezium 3.7.0 was one day old).
 | Schema Registry | `confluentinc/cp-schema-registry:8.3.2` |
 | Kafka UI | `ghcr.io/kafbat/kafka-ui:v1.5.0` |
 | curl (init job) | `curlimages/curl:8.22.0` |
-| .NET SDK | 10.0.402 (`src/global.json`) |
+| .NET SDK and runtime | 10.0.402; images `mcr.microsoft.com/dotnet/sdk:10.0.402-noble`, `aspnet:10.0.14-noble` |
+| avrogen | `Apache.Avro.Tools` 1.12.2 (`dotnet-tools.json`) |
 | NuGet packages | `src/Directory.Packages.props` |
 | CI | Woodpecker: `mcr.microsoft.com/dotnet/sdk:10.0.402-noble`; GitHub Actions: `actions/checkout@v7.0.1`, `actions/setup-dotnet@v6.0.0` |
 

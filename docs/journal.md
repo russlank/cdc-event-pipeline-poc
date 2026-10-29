@@ -11,6 +11,64 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: Format gate fails where the build passes
+
+- **Symptom:** `ci/dotnet-gates.sh` passed build and tests, then `dotnet format`
+  failed with JSON002 "Probable JSON string detected" in the parser tests.
+- **Cause:** JSON002 is an IDE analyzer that the build does not run but
+  `dotnet format` does; the tests hold deliberately malformed JSON in plain
+  strings.
+- **Fix:** JSON002 off for test projects only. The lesson: run the whole gate
+  script locally, not just build and test.
+
+### 2026-10-29: Parse errors leaked message content into logs and headers
+
+- **Symptom:** a poison message sent for the dead-letter check came back with
+  `dlq.error: ... 'this is not a debezium event' is an invalid JSON literal`,
+  and the same text was in the warning log.
+- **Cause:** the parser wrapped framework exception messages, and
+  System.Text.Json quotes the offending text. For a real row that text could
+  be personal data, and both logs and headers must never contain row values.
+- **Fix:** parse failures are described by position and kind only (`invalid
+  JSON at line 0, byte 0`, `a field has a malformed value`); messages about
+  unknown operation or status values no longer echo the value. Regression
+  test: `ParseChange_WithMalformedMessage_DoesNotQuoteItsContent`.
+
+### 2026-10-29: Kafka Connect killed for memory (exit 137)
+
+- **Symptom:** on a fresh start `stack-up.sh` failed with
+  `container cdc-pay-connect-1 exited (137)`; `docker inspect` showed
+  `OOMKilled=true`.
+- **Cause:** the Connect start script defaults to `-Xms256M -Xmx2G`, more than
+  the container's 1.5 GB limit; under snapshot load the heap grew past it.
+  Earlier runs had only been lucky. The Kafka default of a 1 GB heap in a 1 GB
+  container had the same flaw.
+- **Fix:** `HEAP_OPTS: -Xms256m -Xmx1g` for Connect and
+  `KAFKA_HEAP_OPTS: -Xms512m -Xmx512m` for Kafka. Measured after the
+  scenarios: Connect 1.08 of 1.5 GB, Kafka 436 MB of 1 GB.
+
+### 2026-10-29: Translator crash loop before the raw topics exist
+
+- **Symptom:** on a fresh stack the translator logged `BackgroundService failed`
+  with `Subscribed topic not available: ^cdc\.HrCore\.dbo\..*`, the host
+  stopped, and Docker restarted it until Debezium had created the topics.
+- **Cause:** librdkafka reports a missing subscribed topic as a non-fatal
+  error, which `Consume` throws as `ConsumeException`; the worker let it
+  escape, and an escaping exception stops the host.
+- **Fix:** non-fatal consume errors are logged (at most every 30 s per error
+  code) and polling continues; fatal errors still stop the host. Verified on
+  a fresh stack: one warning, no restart, all scenarios pass.
+
+### 2026-10-29: `localhost` resolves to IPv6 first
+
+- **Symptom:** a translator run on the host logged `Connect to ipv6#[::1]:29092
+  failed` for several seconds before it worked.
+- **Cause:** `localhost` resolves to `::1` first, but the compose port binds
+  only `127.0.0.1`; the broker also advertised `localhost`, so every new
+  connection tried IPv6 first.
+- **Fix:** the host listener advertises `127.0.0.1:29092`, and the default
+  settings use `127.0.0.1`.
+
 ### 2026-10-29: Debezium snapshot blocks every update of existing rows
 
 - **Symptom:** the first raw-CDC smoke test hung. The heartbeat topic stayed

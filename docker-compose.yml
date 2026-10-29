@@ -49,7 +49,8 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      # 127.0.0.1, not localhost: localhost resolves to ::1 first, and the port is bound to IPv4 only.
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://127.0.0.1:29092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
@@ -62,6 +63,8 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       # Topics are created explicitly (kafka-init, Connect, Schema Registry).
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Heap well below mem_limit; the default 1 GB heap left no room for the rest of the JVM.
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
     ports:
       - "127.0.0.1:29092:29092"
     mem_limit: 1g
@@ -133,6 +136,8 @@ services:
       CONNECT_CONFIG_PROVIDERS: env
       CONNECT_CONFIG_PROVIDERS_ENV_CLASS: org.apache.kafka.common.config.provider.EnvVarConfigProvider
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
+      # The image defaults to -Xmx2G, more than the container limit: the kernel killed Connect (exit 137).
+      HEAP_OPTS: -Xms256m -Xmx1g
     ports:
       - "127.0.0.1:8083:8083"
     mem_limit: 1536m
@@ -155,6 +160,39 @@ services:
       - ./connect:/connect:ro
     entrypoint: ["/bin/sh", "/connect/register-connector.sh", "http://connect:8083", "/connect/hrcore-connector.json"]
     restart: "no"
+
+  # One-shot: sets compatibility and registers the business event schema. Safe to rerun.
+  schemas-init:
+    image: curlimages/curl:8.22.0
+    depends_on:
+      schema-registry:
+        condition: service_healthy
+    volumes:
+      - ./contracts:/contracts:ro
+    entrypoint: ["/bin/sh", "/contracts/scripts/register-schema.sh", "http://schema-registry:8081", "hr.employee-pay.v1-value", "/contracts/avro/v1/PayEvent.avsc", "FULL_TRANSITIVE"]
+    restart: "no"
+
+  event-translator:
+    build:
+      context: .
+      dockerfile: src/CdcPay.EventTranslator/Dockerfile
+      args:
+        SOURCE_REVISION_ID: ${SOURCE_REVISION_ID:-}
+        SOURCE_BRANCH: ${SOURCE_BRANCH:-}
+        REPOSITORY_URL: ${REPOSITORY_URL:-}
+    image: cdc-pay/event-translator:local
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      schemas-init:
+        condition: service_completed_successfully
+    environment:
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__SchemaRegistryUrl: http://schema-registry:8081
+    ports:
+      - "127.0.0.1:5101:8080"
+    mem_limit: 512m
+    restart: unless-stopped
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:v1.5.0
