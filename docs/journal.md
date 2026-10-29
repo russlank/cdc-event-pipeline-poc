@@ -11,6 +11,44 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: Drill 3, connector down longer than the CDC retention
+
+- **Setup:** Connect stopped; raises for 3001 and 3002 committed; cleanup
+  retention lowered to 1 minute (`sys.sp_cdc_change_job`); cleanup job run.
+- **What happened, by hand:** the first cleanup removed nothing Debezium
+  needed: the low watermark stayed below the stored offset. Retention counts
+  back from the newest change in the database, and with Connect down even the
+  heartbeat stopped. Only after a raise for 3003 more than a minute later did
+  cleanup pass the offset. Of the three raises it removed 3001's: the newest
+  transaction before the boundary (3002's) is kept. Connect started; the task
+  failed at once: `The connector is trying to read change stream starting at
+  ... commitLsn=0000002e:00003ce0:0003 ... but this is no longer available on
+  the server. Reconfigure the connector to use a snapshot mode when needed.`
+  (`BaseSourceTask.validateSchemaHistory`). The watchdog left it failed and
+  `ConnectorNotRunning` reported it. Nothing reached the read model, also not
+  the two raises still in the change tables.
+- **Expectation that was wrong:** from the code, Debezium seemed to start at a
+  change table's start LSN when that is newer than the offset, so the loss
+  looked silent. The start-up check catches it first.
+- **Recovery:** stop the connector, delete its offsets (Kafka Connect offsets
+  API), resume: `snapshot.mode=initial` takes a new snapshot. The read model
+  matched the source again (`271 events, 149 rows`). The restored raises are
+  recorded at the snapshot time (23:23:06), not their commit times (23:17 to
+  23:20); 3002 and 3003 were also restated by the snapshot, not streamed.
+- **Found on the way:** the heartbeat transaction open at the stop never gets
+  its END after the offsets are deleted. The translator gave it up and
+  dead-lettered the heartbeat row, so `DlqNotEmpty` and
+  `TranslatorTransactionsStuck` would fire for a loss of nothing. Now an
+  abandoned transaction of heartbeat or signal rows only is ignored and not
+  counted as abandoned; the abandonment is still logged.
+- **Result:** `bash scripts/drills/03-retention-exceeded.sh`: change rows of
+  the raises 15 before the cleanup, 6 after; `cdc-retention-gap.sh` reported
+  `GAP` before the restart; the task failed and stayed failed; 0 events
+  applied before the re-snapshot; after `scripts/ops/resnapshot.sh` the read
+  model matched the source, 6 events applied, no `IncompleteTransaction`
+  (the one dead letter is scenario 7's row, sent again by the snapshot); gap
+  check passes afterwards.
+
 ### 2026-10-29: Drill 2, SQL Server Agent stopped
 
 - **Setup:** stack caught up, read model `233 events, 129 rows`, equal to the

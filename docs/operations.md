@@ -203,6 +203,7 @@ the source is otherwise quiet.
 ```sh
 bash scripts/drills/01-connect-restart.sh   # Connect stopped mid-transaction, changes made, restarted
 bash scripts/drills/02-agent-stopped.sh     # SQL Server Agent stopped, changes made, started
+bash scripts/drills/03-retention-exceeded.sh  # Connect down past the CDC retention, re-snapshot
 ```
 
 Drill 1 commits a raise and stops Connect as soon as Debezium has sent its
@@ -221,6 +222,44 @@ fires, and after `xp_servicecontrol N'START'` the capture job (it starts with
 Agent) catches up: both events applied once, recorded at their source commit
 time, nothing dead-lettered, and the alert resolved. Drill helpers are in
 `scripts/drills/lib.sh`.
+
+Drill 3 stops Connect, commits raises, lowers the CDC cleanup retention to 1
+minute, and runs the cleanup job, so it removes a change Debezium has not
+read. It passes when the gap check reports the gap, the restarted task fails
+and stays failed, nothing is applied, and the re-snapshot restores the read
+model without dead-lettering a transaction. The retention is set back to
+4320 minutes at the end, also when the drill fails.
+
+### Connector Down Longer Than the CDC Retention
+
+The cleanup job deletes changes older than the retention (default 4320
+minutes, `EXEC sys.sp_cdc_help_jobs`). Retention counts back from the newest
+change in the database, not from the current time, and the newest transaction
+before the boundary is kept. If Connect was down longer, check before starting
+it:
+
+```sh
+bash scripts/checks/cdc-retention-gap.sh    # exit 1: cleanup passed the stored offset
+```
+
+Debezium checks the same at task start: the task fails with `... but this is
+no longer available on the server`, the watchdog leaves it failed, and
+`ConnectorNotRunning` fires. Repair with a re-snapshot:
+
+```sh
+scripts/ops/resnapshot.sh
+```
+
+It stops the connector, deletes its offsets (`DELETE
+/connectors/hrcore-cdc/offsets`), and resumes it; with no offsets,
+`snapshot.mode=initial` takes a new snapshot, then streams. Snapshot events
+restate every row: the read model matches the source again, but missed
+changes are recorded at the snapshot time, not their commit time, and a
+change overwritten during the gap is gone. The heartbeat transaction that was
+open at the stop never gets its END; the translator gives it up after 60 s
+and ignores it. Scenario 7's rejected row is dead-lettered again by every
+snapshot. `snapshot.mode=when_needed` would re-snapshot on its own; it is not
+used, so a loss is never repaired silently.
 
 ### Repairing a Read Model That Misses a Transaction
 

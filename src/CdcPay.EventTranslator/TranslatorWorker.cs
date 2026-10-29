@@ -146,15 +146,17 @@ public sealed class TranslatorWorker(
         {
             // Logged even without rows, so an abandoned transaction is never silent.
             TranslatorLogs.TransactionAbandoned(logger, gaveUp.TransactionId, gaveUp.Rows.Count, gaveUp.Detail);
-            metrics.Abandoned();
+            if (!EventClassifier.IsInfrastructureOnly(gaveUp))
+            {
+                metrics.Abandoned();
+            }
         }
 
         IReadOnlyList<TranslationOutcome> outcomes = output switch
         {
             CompletedTransaction transaction => _classifier.Classify(transaction),
             SnapshotRow snapshot => _classifier.Classify(snapshot),
-            AbandonedTransaction abandoned when abandoned.Rows.Count > 0 =>
-                [new DeadLetterOutcome(DeadLetterReasons.IncompleteTransaction, $"transaction {abandoned.TransactionId}: {abandoned.Detail}", abandoned.Rows)],
+            AbandonedTransaction abandoned => EventClassifier.Classify(abandoned),
             _ => [],
         };
 

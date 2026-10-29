@@ -37,7 +37,7 @@ public sealed class EventClassifier
         {
             switch (row.Row)
             {
-                case OtherRow { Table: "DebeziumHeartbeat" or "DebeziumSignal" }:
+                case OtherRow when IsInfrastructure(row):
                     infrastructure.Add(row);
                     break;
                 case OtherRow { Table: "Tenant" }:
@@ -68,6 +68,31 @@ public sealed class EventClassifier
         }
 
         return outcomes;
+    }
+
+    /// <summary>
+    /// An abandoned transaction's rows go to the dead-letter topic, unless they are all heartbeat
+    /// or signal rows: those have no pay meaning, so nothing is lost and they are ignored.
+    /// </summary>
+    public static IReadOnlyList<TranslationOutcome> Classify(AbandonedTransaction abandoned)
+    {
+        ArgumentNullException.ThrowIfNull(abandoned);
+
+        if (abandoned.Rows.Count == 0)
+        {
+            return [];
+        }
+
+        return IsInfrastructureOnly(abandoned)
+            ? [new IgnoredOutcome(IgnoreReasons.Infrastructure, abandoned.Rows)]
+            : [DeadLetter(DeadLetterReasons.IncompleteTransaction, $"transaction {abandoned.TransactionId}: {abandoned.Detail}", abandoned.Rows)];
+    }
+
+    /// <summary>True when every row of the abandoned transaction is a heartbeat or signal row.</summary>
+    public static bool IsInfrastructureOnly(AbandonedTransaction abandoned)
+    {
+        ArgumentNullException.ThrowIfNull(abandoned);
+        return abandoned.Rows.Count > 0 && abandoned.Rows.All(IsInfrastructure);
     }
 
     public IReadOnlyList<TranslationOutcome> Classify(SnapshotRow snapshot)
@@ -349,6 +374,8 @@ public sealed class EventClassifier
     private static EventOutcome Event(PayEvent @event, IReadOnlyList<RawChange> rows) => new(@event, rows);
 
     private static DeadLetterOutcome DeadLetter(string reason, string detail, IReadOnlyList<RawChange> rows) => new(reason, detail, rows);
+
+    private static bool IsInfrastructure(RawChange change) => change.Row is OtherRow { Table: "DebeziumHeartbeat" or "DebeziumSignal" };
 
     private static DeadLetterOutcome Unclassified(string detail, IReadOnlyList<RawChange> rows) =>
         DeadLetter(DeadLetterReasons.UnclassifiedTransaction, detail, rows);

@@ -51,7 +51,7 @@ tenant, employee, or amount appears in a tag.
 | `cdcpay_translator_dlq_produced_total` | counter | `reason` | raw messages dead-lettered |
 | `cdcpay_translator_changes_ignored_total` | counter | `reason` | source rows without pay meaning |
 | `cdcpay_translator_transactions_open` | gauge | | source transactions seen, not complete yet; normally 1 (below) |
-| `cdcpay_translator_transactions_abandoned_total` | counter | | transactions given up as incomplete after 60 s |
+| `cdcpay_translator_transactions_abandoned_total` | counter | | transactions with pay rows given up as incomplete after 60 s (heartbeat-only ones are ignored, not counted) |
 | `cdcpay_translator_end_to_end_lag_seconds` | histogram | `event_type` | source commit (`recordedAt`) to publication |
 | `cdcpay_projector_events_applied_total` | counter | `result` | events applied to the read model |
 | `cdcpay_projector_events_duplicate_total` | counter | | events skipped as already processed |
@@ -122,7 +122,7 @@ docker compose logs -f alert-sink
 | Alert | Fires when | First steps |
 |---|---|---|
 | `MetricsTargetDown` (critical) | for 1 minute Prometheus cannot scrape a target (`otel-collector`, `connect`, `kafka-exporter`, `alertmanager`) | `docker compose ps`, then the target's log. With `otel-collector` down every .NET metric is missing, so `TranslatorTransactionsStuck` cannot fire until it is back |
-| `ConnectorNotRunning` (critical) | for 1 minute the connector is not reported as running, or its task is not running | `curl -s localhost:8083/connectors/hrcore-cdc/status`; for a failed task read `trace`, then `curl -X POST localhost:8083/connectors/hrcore-cdc/tasks/0/restart`. The known failure after a Connect restart (`NullPointerException` in `buildEndTransactionValue`) is restarted by `connect-watchdog` within about 10 s and does not fire this alert; `docker compose logs connect-watchdog` shows the restarts ([operations.md](operations.md)) |
+| `ConnectorNotRunning` (critical) | for 1 minute the connector is not reported as running, or its task is not running | `curl -s localhost:8083/connectors/hrcore-cdc/status`; for a failed task read `trace`, then `curl -X POST localhost:8083/connectors/hrcore-cdc/tasks/0/restart`. The known failure after a Connect restart (`NullPointerException` in `buildEndTransactionValue`) is restarted by `connect-watchdog` within about 10 s and does not fire this alert; `docker compose logs connect-watchdog` shows the restarts ([operations.md](operations.md)). A trace with `but this is no longer available on the server` means CDC cleanup removed changes Debezium had not read: re-snapshot with `scripts/ops/resnapshot.sh` |
 | `CdcEventsStalled` (critical) | Debezium has seen no change for 2 minutes, for 1 minute | the heartbeat changes the source every 10 s, so capture is broken: check SQL Server Agent (`SELECT status_desc FROM sys.dm_server_services`) and the CDC capture job (`EXEC sys.sp_cdc_help_jobs`). Debezium logs nothing in this case and its task stays running; this alert is the only signal. Start Agent with `EXEC master.dbo.xp_servicecontrol N'START', N'SQLServerAGENT'`: the capture job starts with it and catches up, and events keep their source commit time |
 | `ConsumerLagHigh` (warning) | a consumer group is more than 100 messages behind for 2 minutes | the service's log and `/health/ready`; is it running? |
 | `DlqNotEmpty` (warning) | a message reached `hr.dlq` in the last 5 minutes | read the `dlq.reason` and `dlq.error` headers ([operations.md](operations.md)) |

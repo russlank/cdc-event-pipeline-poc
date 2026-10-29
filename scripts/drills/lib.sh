@@ -21,22 +21,6 @@ task_state() {
 
 task_running() { [ "$(task_state)" = RUNNING ]; }
 
-# kafka_tool <tool> <args...>: runs a Kafka command-line tool against the broker.
-kafka_tool() {
-  docker compose exec -T kafka "/opt/kafka/bin/$1" --bootstrap-server kafka:9092 "${@:2}"
-}
-
-# last_message <topic>: prints the last message of a single-partition topic.
-last_message() {
-  kafka_tool kafka-console-consumer.sh --topic "$1" --from-beginning --property print.key=true \
-    --timeout-ms 5000 2>/dev/null | tail -n 1
-}
-
-# end_offset <topic>: prints the sum of the end offsets of the topic's partitions.
-end_offset() {
-  kafka_tool kafka-get-offsets.sh --topic "$1" | awk -F: '{ sum += $3 } END { print sum }'
-}
-
 # processed_events: prints the number of events the projector has applied.
 processed_events() {
   readmodel_sql 'SELECT count(*) FROM processed_event'

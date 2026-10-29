@@ -351,6 +351,38 @@ public sealed class EventClassifierTests
         Assert.Equal(IgnoreReasons.ReferenceData, Assert.IsType<IgnoredOutcome>(Assert.Single(_classifier.Classify(new SnapshotRow(Snapshot(Other("Tenant")))))).Reason);
     }
 
+    [Fact]
+    public void Classify_AbandonedHeartbeatTransaction_IsIgnored()
+    {
+        // Seen after a re-snapshot: the heartbeat transaction open at the stop never gets its END.
+        AbandonedTransaction abandoned = new("hb", [Update(Other("DebeziumHeartbeat"), Other("DebeziumHeartbeat"), "hb")], null, "no END");
+
+        IgnoredOutcome ignored = Assert.IsType<IgnoredOutcome>(Assert.Single(EventClassifier.Classify(abandoned)));
+
+        Assert.Equal(IgnoreReasons.Infrastructure, ignored.Reason);
+        Assert.True(EventClassifier.IsInfrastructureOnly(abandoned));
+    }
+
+    [Fact]
+    public void Classify_AbandonedTransactionWithPayRows_IsIncompleteTransaction()
+    {
+        RawChange heartbeat = Update(Other("DebeziumHeartbeat"), Other("DebeziumHeartbeat"), "t1", 1);
+        RawChange raise = Create(Salary(114, 38137m, Nov), "t1", 2);
+        AbandonedTransaction abandoned = new("t1", [heartbeat, raise], null, "no END");
+
+        DeadLetterOutcome deadLetter = Assert.IsType<DeadLetterOutcome>(Assert.Single(EventClassifier.Classify(abandoned)));
+
+        Assert.Equal(DeadLetterReasons.IncompleteTransaction, deadLetter.Reason);
+        Assert.Equal([heartbeat, raise], deadLetter.Rows);
+        Assert.False(EventClassifier.IsInfrastructureOnly(abandoned));
+    }
+
+    [Fact]
+    public void Classify_AbandonedTransactionWithoutRows_HasNoOutcome()
+    {
+        Assert.Empty(EventClassifier.Classify(new AbandonedTransaction("t1", [], null, "incomplete")));
+    }
+
     private PayEvent SingleEvent(CompletedTransaction transaction) => Assert.Single(Events(transaction));
 
     private List<PayEvent> Events(CompletedTransaction transaction) =>
