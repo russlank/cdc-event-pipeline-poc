@@ -1,7 +1,34 @@
-# Woodpecker CI. Runs the same gates as .github/workflows/ci.yml: ci/dotnet-gates.sh.
+# Woodpecker CI. Runs the same gates as .github/workflows/ci.yml: ci/dotnet-gates.sh and
+# ci/schema-compat.sh.
 
 when:
   - event: [push, pull_request, manual]
+
+services:
+  # Single-node Kafka for the Schema Registry; settings as in docker-compose.yml.
+  kafka:
+    image: apache/kafka:4.3.2
+    environment:
+      CLUSTER_ID: QTEGCfpKUmmNZpjgXb67cA
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx512m
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.3.2
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
+      SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: "1"
 
 steps:
   dotnet:
@@ -9,3 +36,9 @@ steps:
     image: mcr.microsoft.com/dotnet/sdk:10.0.402-noble
     commands:
       - bash ci/dotnet-gates.sh "$${CI_COMMIT_BRANCH}" "$${CI_REPO_URL}"
+
+  contracts:
+    # The script waits up to two minutes for the registry service.
+    image: curlimages/curl:8.22.0
+    commands:
+      - sh ci/schema-compat.sh http://schema-registry:8081

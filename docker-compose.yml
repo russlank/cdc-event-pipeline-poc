@@ -161,7 +161,7 @@ services:
     entrypoint: ["/bin/sh", "/connect/register-connector.sh", "http://connect:8083", "/connect/hrcore-connector.json"]
     restart: "no"
 
-  # One-shot: sets compatibility and registers the business event schema. Safe to rerun.
+  # One-shot: sets compatibility and registers every contract version in order. Safe to rerun.
   schemas-init:
     image: curlimages/curl:8.22.0
     depends_on:
@@ -169,7 +169,7 @@ services:
         condition: service_healthy
     volumes:
       - ./contracts:/contracts:ro
-    entrypoint: ["/bin/sh", "/contracts/scripts/register-schema.sh", "http://schema-registry:8081", "hr.employee-pay.v1-value", "/contracts/avro/v1/PayEvent.avsc", "FULL_TRANSITIVE"]
+    entrypoint: ["/bin/sh", "/contracts/scripts/register-all.sh", "http://schema-registry:8081", "hr.employee-pay.v1-value", "/contracts", "FULL_TRANSITIVE"]
     restart: "no"
 
   event-translator:

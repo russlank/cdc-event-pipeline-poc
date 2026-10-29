@@ -12,8 +12,11 @@ public static class PayEventContract
     /// <summary>Dead-letter topic for messages that could not be processed.</summary>
     public const string DeadLetterTopic = "hr.dlq";
 
-    /// <summary>Contract version written to <c>schemaVersion</c> (contracts/avro/v1).</summary>
-    public const int SchemaVersion = 1;
+    /// <summary>Contract version written to <c>schemaVersion</c>; the generated classes are from contracts/avro/v2.</summary>
+    public const int SchemaVersion = 2;
+
+    /// <summary>Value of <c>payComponent</c> (contract v2) when the source row has none.</summary>
+    public const string DefaultPayComponent = "Base";
 
     /// <summary>Message key: per-employee ordering.</summary>
     public static string Key(int tenantId, int employeeId) => $"{tenantId}:{employeeId}";

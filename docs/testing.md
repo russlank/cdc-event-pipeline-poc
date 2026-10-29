@@ -10,12 +10,13 @@ How the code is tested and how to run the checks.
 
 ## Gates
 
-`ci/dotnet-gates.sh` runs all four gates; both CI pipelines call it
-(`.woodpecker.yml` in `mcr.microsoft.com/dotnet/sdk:10.0.402-noble`, and
-`.github/workflows/ci.yml` on GitHub-compatible runners). Locally:
+`ci/dotnet-gates.sh` runs all four .NET gates and `ci/schema-compat.sh` the
+contract compatibility gate; both CI pipelines (`.woodpecker.yml` and
+`.github/workflows/ci.yml`) run both. Locally:
 
 ```sh
 bash ci/dotnet-gates.sh            # optional: <branch> <repository-url> for the build identity
+sh ci/schema-compat.sh http://127.0.0.1:8081
 ```
 
 The same gates by hand, from `src/`:
@@ -35,7 +36,7 @@ also means `dotnet format` finds nothing. Tests run on Microsoft.Testing.Platfor
 
 | Project | Scope |
 |---|---|
-| `CdcPay.UnitTests` | pure logic and in-memory host tests (`WebApplicationFactory`): identity, event ids, Debezium parsing (fixtures recorded from the real connector in `Translation/Fixtures`), transaction assembly, offsets, every classification rule, Avro round trips, contract drift |
+| `CdcPay.UnitTests` | pure logic and in-memory host tests (`WebApplicationFactory`): identity, event ids, Debezium parsing (fixtures recorded from the real connector in `Translation/Fixtures`), transaction assembly including redelivery, offsets, every classification rule, Avro round trips, contract drift, v1/v2 resolution in both directions |
 
 Integration tests against Kafka, Schema Registry, and PostgreSQL
 (Testcontainers) join with the projector. End-to-end checks against the

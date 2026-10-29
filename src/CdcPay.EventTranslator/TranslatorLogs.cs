@@ -27,6 +27,9 @@ internal static partial class TranslatorLogs
     [LoggerMessage(EventId = 2012, Level = LogLevel.Warning, Message = "Dead-lettered {Position}: {Reason} ({Detail})")]
     public static partial void DeadLettered(ILogger logger, string position, string reason, string detail);
 
+    [LoggerMessage(EventId = 2013, Level = LogLevel.Warning, Message = "Abandoned transaction {TransactionId} with {RowCount} rows: {Detail}")]
+    public static partial void TransactionAbandoned(ILogger logger, string transactionId, int rowCount, string detail);
+
     [LoggerMessage(EventId = 2020, Level = LogLevel.Debug, Message = "Committed offsets for {PartitionCount} partitions")]
     public static partial void OffsetsCommitted(ILogger logger, int partitionCount);
 }

@@ -30,6 +30,24 @@ public sealed class DebeziumParserTests
     }
 
     [Fact]
+    public void ParseChange_WithoutPayComponentColumn_UsesTheContractDefault()
+    {
+        SalaryRow salary = Assert.IsType<SalaryRow>(DebeziumParser.ParseChange(Fixture("salary-insert-raise.json", "cdc.HrCore.dbo.Salary")).After);
+
+        Assert.Equal("Base", salary.PayComponent);
+    }
+
+    [Fact]
+    public void ParseChange_WithPayComponentColumn_ReadsIt()
+    {
+        string json = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Translation", "Fixtures", "salary-insert-raise.json"))
+            .Replace("\"Reason\":\"Raise\"}", "\"Reason\":\"Raise\",\"PayComponent\":\"Allowance\"}", StringComparison.Ordinal);
+        RawMessage message = new(new KafkaPosition("cdc.HrCore.dbo.Salary", 0, 0), null, Encoding.UTF8.GetBytes(json));
+
+        Assert.Equal("Allowance", Assert.IsType<SalaryRow>(DebeziumParser.ParseChange(message).After).PayComponent);
+    }
+
+    [Fact]
     public void ParseChange_WithStreamedUpdate_ReadsBothImages()
     {
         RawChange change = DebeziumParser.ParseChange(Fixture("salary-update-close.json", "cdc.HrCore.dbo.Salary"));

@@ -17,12 +17,12 @@ public sealed class PayEventContractTests
     [Fact]
     public void GeneratedSchema_MatchesContractFile()
     {
-        using Stream stream = typeof(PayEventContract).Assembly.GetManifestResourceStream("contracts.avro.v1.PayEvent.avsc")
+        using Stream stream = typeof(PayEventContract).Assembly.GetManifestResourceStream("contracts.avro.v2.PayEvent.avsc")
             ?? throw new InvalidOperationException("contract schema is not embedded");
         using StreamReader reader = new(stream);
         var contract = Schema.Parse(reader.ReadToEnd());
 
-        // Fails when contracts/avro/v1/PayEvent.avsc changed without contracts/scripts/generate-csharp.sh.
+        // Fails when the latest contract (contracts/avro/v2) changed without contracts/scripts/generate-csharp.sh.
         Assert.Equal(contract.ToString(), PayEvent._SCHEMA.ToString());
     }
 

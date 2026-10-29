@@ -138,6 +138,12 @@ public sealed class TranslatorWorker(
 
     private async Task HandleAsync(AssemblerOutput output, CancellationToken cancellationToken)
     {
+        if (output is AbandonedTransaction gaveUp)
+        {
+            // Logged even without rows, so an abandoned transaction is never silent.
+            TranslatorLogs.TransactionAbandoned(logger, gaveUp.TransactionId, gaveUp.Rows.Count, gaveUp.Detail);
+        }
+
         IReadOnlyList<TranslationOutcome> outcomes = output switch
         {
             CompletedTransaction transaction => _classifier.Classify(transaction),

@@ -16,7 +16,7 @@ namespace CdcPay.Contracts.Events
 	[global::System.CodeDom.Compiler.GeneratedCodeAttribute("avrogen", "1.12.2+8fa2067f70e3012cb3fd9a8839cd97e8c7cc1772")]
 	public partial class SalaryChangedPayload : global::Avro.Specific.ISpecificRecord
 	{
-		public static global::Avro.Schema _SCHEMA = global::Avro.Schema.Parse(@"{""type"":""record"",""name"":""SalaryChangedPayload"",""namespace"":""CdcPay.Contracts.Events"",""fields"":[{""name"":""salaryId"",""type"":""int""},{""name"":""monthlyAmount"",""type"":{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}},{""name"":""currency"",""type"":""string""},{""name"":""reason"",""doc"":""Raise, Promotion, or (snapshot only) Hire."",""type"":""string""},{""name"":""previousMonthlyAmount"",""default"":null,""type"":[""null"",{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}]}]}");
+		public static global::Avro.Schema _SCHEMA = global::Avro.Schema.Parse(@"{""type"":""record"",""name"":""SalaryChangedPayload"",""namespace"":""CdcPay.Contracts.Events"",""fields"":[{""name"":""salaryId"",""type"":""int""},{""name"":""monthlyAmount"",""type"":{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}},{""name"":""currency"",""type"":""string""},{""name"":""reason"",""doc"":""Raise, Promotion, or (snapshot only) Hire."",""type"":""string""},{""name"":""previousMonthlyAmount"",""default"":null,""type"":[""null"",{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}]},{""name"":""payComponent"",""doc"":""Salary.PayComponent; Base when the source has no such column (contract version 1 data)."",""default"":""Base"",""type"":""string""}]}");
 		private int _salaryId;
 		private Avro.AvroDecimal _monthlyAmount;
 		private string _currency;
@@ -25,6 +25,10 @@ namespace CdcPay.Contracts.Events
 		/// </summary>
 		private string _reason;
 		private System.Nullable<Avro.AvroDecimal> _previousMonthlyAmount;
+		/// <summary>
+		/// Salary.PayComponent; Base when the source has no such column (contract version 1 data).
+		/// </summary>
+		private string _payComponent;
 		public virtual global::Avro.Schema Schema
 		{
 			get
@@ -90,6 +94,20 @@ namespace CdcPay.Contracts.Events
 				this._previousMonthlyAmount = value;
 			}
 		}
+		/// <summary>
+		/// Salary.PayComponent; Base when the source has no such column (contract version 1 data).
+		/// </summary>
+		public string payComponent
+		{
+			get
+			{
+				return this._payComponent;
+			}
+			set
+			{
+				this._payComponent = value;
+			}
+		}
 		public virtual object Get(int fieldPos)
 		{
 			switch (fieldPos)
@@ -99,6 +117,7 @@ namespace CdcPay.Contracts.Events
 			case 2: return this.currency;
 			case 3: return this.reason;
 			case 4: return this.previousMonthlyAmount;
+			case 5: return this.payComponent;
 			default: throw new global::Avro.AvroRuntimeException("Bad index " + fieldPos + " in Get()");
 			};
 		}
@@ -111,6 +130,7 @@ namespace CdcPay.Contracts.Events
 			case 2: this.currency = (System.String)fieldValue; break;
 			case 3: this.reason = (System.String)fieldValue; break;
 			case 4: this.previousMonthlyAmount = (System.Nullable<Avro.AvroDecimal>)fieldValue; break;
+			case 5: this.payComponent = (System.String)fieldValue; break;
 			default: throw new global::Avro.AvroRuntimeException("Bad index " + fieldPos + " in Put()");
 			};
 		}

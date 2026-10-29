@@ -11,6 +11,42 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-29: Redelivered transaction blocks the translator for a minute
+
+- **Symptom:** after the Salary capture-instance switch, a raise and a
+  correction reached the raw topics at once but became business events only
+  about a minute later; the translator's committed offsets stood still, even
+  for heartbeats, and nothing was dead-lettered.
+- **Cause:** dropping the old capture instance made Debezium restart its task
+  (see the next entry), and the restart redelivered two heartbeat
+  transactions. For one, the translator saw row, duplicate row, `END`,
+  duplicate `END`. The duplicate row was discarded, the first `END` released
+  the transaction, and the duplicate `END` opened it again, waiting for a row
+  that would never come. That phantom transaction sat at the head of the
+  queue until the 60 s timeout, then was abandoned with no rows, so nothing
+  was dead-lettered and nothing was logged. Found by comparing every `END`
+  count with the rows on the raw topics.
+- **Fix:** the assembler remembers recently released transactions and their
+  rows; a repeated `END` or row of one is discarded as a duplicate, a row it
+  never had is dead-lettered. Every abandoned transaction is logged, even
+  without rows. Regression test:
+  `Accept_WithDuplicateRowBeforeBothEnds_DoesNotBlockLaterTransactions`.
+  Rerun on a fresh stack: both events arrive, nothing abandoned.
+- **Lesson:** "at least once" applies to the CDC source too; the first design
+  treated a late row as an error instead of a duplicate.
+
+### 2026-10-29: Dropping the old capture instance makes Debezium restart
+
+- **Symptom:** right after `sys.sp_cdc_disable_table` for `dbo_Salary`, Connect
+  logged about 100 `Producer failure` errors within a second:
+  `Invalid object name 'HrCore.cdc.dbo_Salary_CT'`, then `Going to restart
+  connector after 10 sec. after a retriable exception`.
+- **Cause:** Debezium had already switched to `dbo_Salary_v2` but still listed
+  the old change table and queried it once more.
+- **Fix:** none needed in Debezium; the restart is automatic and nothing is
+  lost. The runbook waits for the connector to run again, and the translator
+  handles the redelivery the restart causes (previous entry).
+
 ### 2026-10-29: Format gate fails where the build passes
 
 - **Symptom:** `ci/dotnet-gates.sh` passed build and tests, then `dotnet format`

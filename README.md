@@ -45,6 +45,7 @@ Details: [docs/getting-started.md](docs/getting-started.md).
 
 ```sh
 bash ci/dotnet-gates.sh       # restore, build, test, format: what CI runs
+sh ci/schema-compat.sh http://127.0.0.1:8081   # contract compatibility (needs a Schema Registry)
 ```
 
 Or step by step:
@@ -78,7 +79,7 @@ newer one existed (for example Debezium 3.7.0 was one day old).
 | NuGet packages | `src/Directory.Packages.props` |
 | CI | Woodpecker: `mcr.microsoft.com/dotnet/sdk:10.0.402-noble`; GitHub Actions: `actions/checkout@v7.0.1`, `actions/setup-dotnet@v6.0.0` |
 
-Version of this repository: `0.1.0` (`src/Directory.Build.props`); tags are
+The version is `VersionPrefix` in `src/Directory.Build.props`; tags are
 `v<version>`.
 
 ## License

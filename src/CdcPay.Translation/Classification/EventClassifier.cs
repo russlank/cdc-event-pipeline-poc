@@ -189,7 +189,7 @@ public sealed class EventClassifier
 
         var employee = (EmployeeRow)employeeInsert.After!;
         InitialSalary? salary = salaryInserts.Count == 1 && salaryInserts[0].After is SalaryRow s
-            ? new InitialSalary { salaryId = s.SalaryId, monthlyAmount = PayEventFactory.ToAvroDecimal(s.MonthlyAmount), currency = s.Currency }
+            ? new InitialSalary { salaryId = s.SalaryId, monthlyAmount = PayEventFactory.ToAvroDecimal(s.MonthlyAmount), currency = s.Currency, payComponent = s.PayComponent }
             : null;
         InitialPosition? position = positionInserts.Count == 1 && positionInserts[0].After is PositionRow p
             ? new InitialPosition { positionId = p.PositionId, title = p.Title, level = p.Level }
@@ -265,6 +265,7 @@ public sealed class EventClassifier
             previousMonthlyAmount = changed.Contains("MonthlyAmount") ? PayEventFactory.ToAvroDecimal(before.MonthlyAmount) : null,
             previousEffectiveFrom = changed.Contains("EffectiveFrom") ? PayEventFactory.ToAvroDate(before.EffectiveFrom) : null,
             previousEffectiveTo = changed.Contains("EffectiveTo") && before.EffectiveTo is { } to ? PayEventFactory.ToAvroDate(to) : null,
+            payComponent = after.PayComponent,
         };
         PayEvent @event = PayEventFactory.Create(
             EventTypes.SalaryCorrected, correction, [correction], after.TenantId, after.EmployeeId, after.EffectiveFrom, after.EffectiveTo, payload);
@@ -297,6 +298,7 @@ public sealed class EventClassifier
                 currency = salary.Currency,
                 reason = salary.Reason,
                 previousMonthlyAmount = previousAmount is { } amount ? PayEventFactory.ToAvroDecimal(amount) : null,
+                payComponent = salary.PayComponent,
             });
 
     private static PayEvent PositionChanged(RawChange anchor, PositionRow position, PositionRow? previous) =>

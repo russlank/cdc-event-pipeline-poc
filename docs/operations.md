@@ -99,6 +99,43 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-s
 `contracts/avro/v1/PayEvent.avsc`. After changing the schema, regenerate the C#
 classes with `bash contracts/scripts/generate-csharp.sh`.
 
+## Contract Compatibility Gate
+
+```sh
+sh ci/schema-compat.sh http://127.0.0.1:8081   # any registry; uses a throwaway subject
+```
+
+Registers every contract version in order under `FULL_TRANSITIVE`, then requires
+`contracts/examples/breaking/PayEvent.avsc` to be rejected. CI runs it against
+Kafka and Schema Registry started from `docker-compose.yml` (GitHub Actions) or
+as pipeline services (Woodpecker). To check one schema against the live subject:
+
+```sh
+sh contracts/scripts/check-compatibility.sh http://127.0.0.1:8081 hr.employee-pay.v1-value contracts/avro/v2/PayEvent.avsc
+```
+
+## Source Schema Change: Salary.PayComponent
+
+Online, without stopping CDC:
+
+```sh
+bash scripts/ops/migrate-salary-paycomponent.sh
+```
+
+| Step | What happens |
+|---|---|
+| 1 | checks that the latest registered contract has `payComponent` (contract v2 must be live before the source changes) |
+| 2 | `db/migrations/001-salary-paycomponent.sql`: adds the column (default `'Base'`) and capture instance `dbo_Salary_v2` |
+| 3 | waits for the Connect log line `Migrating schema to Capture instance "dbo_Salary_v2"` (seconds) |
+| 4 | `db/migrations/001-salary-paycomponent-cleanup.sql`: drops the old capture instance `dbo_Salary` |
+| 5 | waits until the connector runs again: Debezium still lists the dropped change table, logs a burst of `Producer failure ... Invalid object name 'HrCore.cdc.dbo_Salary_CT'`, and restarts its task after 10 s |
+
+After the migration, `scripts/checks/paycomponent-raise.sql` and
+`scripts/checks/paycomponent-correction.sql` make changes that use the column.
+The order matters: register the contract first, deploy a translator that
+reads both row shapes second, change the source third, drop the old capture
+instance last.
+
 ## Topics
 
 `kafka-init` creates `hr.employee-pay.v1` (3 partitions) and `hr.dlq`

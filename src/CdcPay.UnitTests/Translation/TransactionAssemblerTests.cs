@@ -104,34 +104,109 @@ public sealed class TransactionAssemblerTests
     }
 
     [Fact]
-    public void Accept_WithRowOfClosedTransaction_AbandonsTheRow()
+    public void Accept_WithRedeliveredTransaction_DiscardsTheDuplicates()
+    {
+        RawChange row = Create(Salary(200, 30000m, Nov), "t1", 1);
+        TransactionMarker end = End("t1", row);
+        _assembler.Accept(row);
+        _assembler.Accept(end);
+        _ = Assert.IsType<CompletedTransaction>(Assert.Single(_assembler.Drain()));
+
+        // A Debezium task restart sends the same transaction again.
+        _assembler.Accept(row);
+        _assembler.Accept(end);
+
+        Assert.All(_assembler.Drain(), output => Assert.IsType<Discarded>(output));
+        Assert.Equal(0, _assembler.OpenTransactionCount);
+    }
+
+    [Fact]
+    public void Accept_WithDuplicateRowBeforeBothEnds_DoesNotBlockLaterTransactions()
+    {
+        // Observed after a Debezium task restart: row, duplicate row, END, duplicate END.
+        // The duplicate END must not reopen the transaction and block the queue.
+        RawChange heartbeat = Update(Other("DebeziumHeartbeat"), Other("DebeziumHeartbeat"), "hb", 1);
+        RawChange duplicate = Update(Other("DebeziumHeartbeat"), Other("DebeziumHeartbeat"), "hb", 1);
+        TransactionMarker end = End("hb", heartbeat);
+        RawChange raise = Create(Salary(300, 30000m, Nov), "t2", 1);
+
+        _assembler.Accept(heartbeat);
+        _assembler.Accept(duplicate);
+        _assembler.Accept(end);
+        _assembler.Accept(end);
+        _assembler.Accept(raise);
+        _assembler.Accept(End("t2", raise));
+
+        IReadOnlyList<AssemblerOutput> outputs = _assembler.Drain();
+        Assert.Equal(["hb", "t2"], outputs.OfType<CompletedTransaction>().Select(t => t.TransactionId));
+        Assert.Equal(2, outputs.OfType<Discarded>().Count());
+        Assert.Equal(0, _assembler.OpenTransactionCount);
+    }
+
+    [Fact]
+    public void Accept_WithRowThatReleasedTransactionDidNotHave_AbandonsIt()
     {
         RawChange row = Create(Salary(200, 30000m, Nov), "t1", 1);
         _assembler.Accept(End("t1", row));
         _assembler.Accept(row);
         _ = _assembler.Drain();
 
-        RawChange late = Create(Salary(201, 30000m, Nov), "t1", 2);
-        _assembler.Accept(late);
+        RawChange unknown = Create(Salary(201, 30000m, Nov), "t1", 2);
+        _assembler.Accept(unknown);
 
-        Assert.Equal([late], Assert.IsType<AbandonedTransaction>(Assert.Single(_assembler.Drain())).Rows);
+        Assert.Equal([unknown], Assert.IsType<AbandonedTransaction>(Assert.Single(_assembler.Drain())).Rows);
+    }
+
+    [Fact]
+    public void Accept_WithMissingRowAfterTimeout_AbandonsTheLateRow()
+    {
+        RawChange arrived = Create(Salary(200, 30000m, Nov), "t1", 1);
+        RawChange missing = Create(Salary(201, 30000m, Nov), "t1", 2);
+        _assembler.Accept(End("t1", arrived, missing));
+        _assembler.Accept(arrived);
+        _clock.Advance(TimeSpan.FromSeconds(60));
+        _assembler.ExpireStale();
+        _ = Assert.IsType<AbandonedTransaction>(Assert.Single(_assembler.Drain()));
+
+        _assembler.Accept(missing);
+
+        Assert.Equal([missing], Assert.IsType<AbandonedTransaction>(Assert.Single(_assembler.Drain())).Rows);
+    }
+
+    [Fact]
+    public void Accept_WithRowRepeatedInOpenTransaction_DiscardsTheRepeat()
+    {
+        RawChange first = Create(Salary(200, 30000m, Nov), "t1", 1);
+        RawChange second = Create(Position(10, "Lead", 4, Nov), "t1", 2);
+        RawChange repeat = Create(Salary(200, 30000m, Nov), "t1", 1);
+
+        _assembler.Accept(first);
+        _assembler.Accept(repeat);
+        _assembler.Accept(second);
+        _assembler.Accept(End("t1", first, second));
+
+        IReadOnlyList<AssemblerOutput> outputs = _assembler.Drain();
+        Assert.Equal(repeat.Message.Position, Assert.IsType<Discarded>(outputs[0]).Position);
+        Assert.Equal(2, Assert.IsType<CompletedTransaction>(outputs[1]).Rows.Count);
     }
 
     [Fact]
     public void Accept_WithBeginOrRepeatedEnd_Discards()
     {
         RawChange row = Create(Salary(200, 30000m, Nov), "t1", 1);
-        TransactionMarker end = End("t1", row);
+        RawChange other = Create(Salary(201, 30000m, Nov), "t1", 2);
+        TransactionMarker end = End("t1", row, other);
         _assembler.Accept(Begin("t1"));
         _assembler.Accept(end);
         _assembler.Accept(row);
         _assembler.Accept(end);
+        _assembler.Accept(other);
 
         IReadOnlyList<AssemblerOutput> outputs = _assembler.Drain();
         Assert.Equal(3, outputs.Count);
         _ = Assert.IsType<Discarded>(outputs[0]);
-        _ = Assert.IsType<CompletedTransaction>(outputs[1]);
-        _ = Assert.IsType<Discarded>(outputs[2]);
+        _ = Assert.IsType<Discarded>(outputs[1]);
+        _ = Assert.IsType<CompletedTransaction>(outputs[2]);
     }
 
     [Fact]

@@ -1,0 +1,124 @@
+{
+  "type": "record",
+  "name": "PayEvent",
+  "namespace": "CdcPay.Contracts.Events",
+  "doc": "A business event about an employee's pay or position (topic hr.employee-pay.v1, contract version 2).",
+  "fields": [
+    { "name": "eventId", "type": { "type": "string", "logicalType": "uuid" }, "doc": "Deterministic id derived from the source change; equal for replays of the same change." },
+    { "name": "eventType", "type": "string", "doc": "EmployeeHired, SalaryChanged, SalaryCorrected, PositionChanged, or EmployeeTerminated; names the payload branch." },
+    { "name": "schemaVersion", "type": "int", "doc": "Contract version from contracts/avro (2 for this schema)." },
+    { "name": "tenantId", "type": "int" },
+    { "name": "employeeId", "type": "int" },
+    { "name": "effectiveFrom", "type": { "type": "int", "logicalType": "date" }, "doc": "Valid time: first day the fact applies." },
+    { "name": "effectiveTo", "type": ["null", { "type": "int", "logicalType": "date" }], "default": null, "doc": "Valid time: first day the fact no longer applies (exclusive); null = open-ended." },
+    { "name": "recordedAt", "type": { "type": "long", "logicalType": "timestamp-millis" }, "doc": "Transaction time: source commit time (UTC); snapshot read time for snapshot events." },
+    { "name": "isRetroactive", "type": "boolean", "doc": "True when effectiveFrom is before the UTC date of recordedAt; false for snapshot events." },
+    {
+      "name": "source",
+      "type": {
+        "type": "record",
+        "name": "EventSource",
+        "doc": "Where the event came from, for traceability.",
+        "fields": [
+          { "name": "tables", "type": { "type": "array", "items": "string" }, "doc": "Source tables that contributed rows, for example dbo.Employee." },
+          { "name": "commitLsn", "type": "string" },
+          { "name": "changeLsn", "type": ["null", "string"], "default": null, "doc": "LSN of the anchor row; null for snapshot rows." },
+          { "name": "transactionId", "type": ["null", "string"], "default": null, "doc": "Debezium transaction id; null for snapshot rows." },
+          { "name": "snapshot", "type": "boolean", "doc": "True when the row came from an initial or incremental snapshot." }
+        ]
+      }
+    },
+    {
+      "name": "payload",
+      "type": [
+        {
+          "type": "record",
+          "name": "EmployeeHiredPayload",
+          "fields": [
+            { "name": "hireDate", "type": { "type": "int", "logicalType": "date" } },
+            { "name": "gender", "type": "string", "doc": "F, M, or X, as recorded at hire." },
+            {
+              "name": "initialSalary",
+              "type": [
+                "null",
+                {
+                  "type": "record",
+                  "name": "InitialSalary",
+                  "fields": [
+                    { "name": "salaryId", "type": "int" },
+                    { "name": "monthlyAmount", "type": { "type": "bytes", "logicalType": "decimal", "precision": 12, "scale": 2 } },
+                    { "name": "currency", "type": "string" },
+                    { "name": "payComponent", "type": "string", "default": "Base", "doc": "Salary.PayComponent; Base when the source has no such column (contract version 1 data)." }
+                  ]
+                }
+              ],
+              "default": null,
+              "doc": "Null for snapshot events (salary history arrives as separate events)."
+            },
+            {
+              "name": "initialPosition",
+              "type": [
+                "null",
+                {
+                  "type": "record",
+                  "name": "InitialPosition",
+                  "fields": [
+                    { "name": "positionId", "type": "int" },
+                    { "name": "title", "type": "string" },
+                    { "name": "level", "type": "int" }
+                  ]
+                }
+              ],
+              "default": null,
+              "doc": "Null for snapshot events."
+            }
+          ]
+        },
+        {
+          "type": "record",
+          "name": "SalaryChangedPayload",
+          "fields": [
+            { "name": "salaryId", "type": "int" },
+            { "name": "monthlyAmount", "type": { "type": "bytes", "logicalType": "decimal", "precision": 12, "scale": 2 } },
+            { "name": "currency", "type": "string" },
+            { "name": "reason", "type": "string", "doc": "Raise, Promotion, or (snapshot only) Hire." },
+            { "name": "previousMonthlyAmount", "type": ["null", { "type": "bytes", "logicalType": "decimal", "precision": 12, "scale": 2 }], "default": null },
+            { "name": "payComponent", "type": "string", "default": "Base", "doc": "Salary.PayComponent; Base when the source has no such column (contract version 1 data)." }
+          ]
+        },
+        {
+          "type": "record",
+          "name": "SalaryCorrectedPayload",
+          "fields": [
+            { "name": "salaryId", "type": "int" },
+            { "name": "monthlyAmount", "type": { "type": "bytes", "logicalType": "decimal", "precision": 12, "scale": 2 }, "doc": "Amount after the correction." },
+            { "name": "currency", "type": "string" },
+            { "name": "changedFields", "type": { "type": "array", "items": "string" }, "doc": "Subset of MonthlyAmount, EffectiveFrom, EffectiveTo." },
+            { "name": "previousMonthlyAmount", "type": ["null", { "type": "bytes", "logicalType": "decimal", "precision": 12, "scale": 2 }], "default": null, "doc": "Set when changedFields has MonthlyAmount." },
+            { "name": "previousEffectiveFrom", "type": ["null", { "type": "int", "logicalType": "date" }], "default": null, "doc": "Set when changedFields has EffectiveFrom." },
+            { "name": "previousEffectiveTo", "type": ["null", { "type": "int", "logicalType": "date" }], "default": null, "doc": "Meaningful when changedFields has EffectiveTo; null then means the period was open-ended." },
+            { "name": "payComponent", "type": "string", "default": "Base", "doc": "Salary.PayComponent; Base when the source has no such column (contract version 1 data)." }
+          ]
+        },
+        {
+          "type": "record",
+          "name": "PositionChangedPayload",
+          "fields": [
+            { "name": "positionId", "type": "int" },
+            { "name": "title", "type": "string" },
+            { "name": "level", "type": "int" },
+            { "name": "previousTitle", "type": ["null", "string"], "default": null },
+            { "name": "previousLevel", "type": ["null", "int"], "default": null }
+          ]
+        },
+        {
+          "type": "record",
+          "name": "EmployeeTerminatedPayload",
+          "fields": [
+            { "name": "terminationDate", "type": { "type": "int", "logicalType": "date" } }
+          ]
+        }
+      ]
+    }
+  ]
+}

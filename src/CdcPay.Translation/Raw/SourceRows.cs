@@ -26,7 +26,8 @@ public sealed record SalaryRow(
     string Currency,
     DateOnly EffectiveFrom,
     DateOnly? EffectiveTo,
-    string Reason) : SourceRow
+    string Reason,
+    string PayComponent = Contracts.PayEventContract.DefaultPayComponent) : SourceRow
 {
     public override string Key => SalaryId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

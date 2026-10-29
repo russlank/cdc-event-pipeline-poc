@@ -62,7 +62,10 @@ internal static class PayEventFactory
     private static string Content(SourceRow row) => row switch
     {
         EmployeeRow e => string.Join('|', e.Gender, Date(e.HireDate), Date(e.TerminationDate)),
-        SalaryRow s => string.Join('|', s.TenantId, s.EmployeeId, s.MonthlyAmount.ToString("0.00", CultureInfo.InvariantCulture), s.Currency, Date(s.EffectiveFrom), Date(s.EffectiveTo), s.Reason),
+        // PayComponent counts only when it is not the default, so rows snapshotted before and
+        // after the column was added keep their ids.
+        SalaryRow s => string.Join('|', s.TenantId, s.EmployeeId, s.MonthlyAmount.ToString("0.00", CultureInfo.InvariantCulture), s.Currency, Date(s.EffectiveFrom), Date(s.EffectiveTo), s.Reason)
+            + (s.PayComponent == PayEventContract.DefaultPayComponent ? string.Empty : $"|{s.PayComponent}"),
         PositionRow p => string.Join('|', p.TenantId, p.EmployeeId, p.Title, p.Level, Date(p.EffectiveFrom), Date(p.EffectiveTo)),
         _ => row.Key,
     };

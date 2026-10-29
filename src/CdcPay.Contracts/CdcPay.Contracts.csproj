@@ -8,9 +8,11 @@
     <PackageReference Include="Apache.Avro" />
   </ItemGroup>
 
-  <!-- The contract schema ships with the assembly so consumers and tests can compare against it. -->
+  <!-- Every contract version ships with the assembly: tests check the generated classes
+       against the latest one and resolution between all of them. -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\contracts\avro\v1\PayEvent.avsc" LogicalName="contracts.avro.v1.PayEvent.avsc" />
+    <EmbeddedResource Include="..\..\contracts\avro\v2\PayEvent.avsc" LogicalName="contracts.avro.v2.PayEvent.avsc" />
   </ItemGroup>
 
 </Project>

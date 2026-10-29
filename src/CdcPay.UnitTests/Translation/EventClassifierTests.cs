@@ -303,6 +303,41 @@ public sealed class EventClassifierTests
     }
 
     [Fact]
+    public void Classify_SnapshotIds_IgnoreDefaultPayComponentButNotOthers()
+    {
+        SalaryRow beforeMigration = Salary(1, 42500m, Hired, reason: "Hire");
+
+        Guid original = SnapshotEvent(Snapshot(beforeMigration)).eventId;
+        Guid sameWithDefault = SnapshotEvent(Snapshot(beforeMigration with { PayComponent = "Base" })).eventId;
+        Guid allowance = SnapshotEvent(Snapshot(beforeMigration with { PayComponent = "Allowance" })).eventId;
+
+        Assert.Equal(original, sameWithDefault);
+        Assert.NotEqual(original, allowance);
+    }
+
+    [Fact]
+    public void Classify_SalaryPayloads_CarryPayComponent()
+    {
+        RawChange hire = Create(Employee(1101, hired: Nov), order: 1);
+        RawChange hireSalary = Create(Salary(500, 36000m, Nov, reason: "Hire", employeeId: 1101) with { PayComponent = "Allowance" }, order: 2);
+        RawChange raise = Create(Salary(114, 38137m, Nov) with { PayComponent = "Overtime" });
+        RawChange correction = Update(Salary(113, 37389m, May), Salary(113, 37939m, May, reason: "Correction"));
+
+        Assert.Equal("Allowance", Assert.IsType<EmployeeHiredPayload>(SingleEvent(Transaction(hire, hireSalary)).payload).initialSalary.payComponent);
+        Assert.Equal("Overtime", Assert.IsType<SalaryChangedPayload>(SingleEvent(Transaction(raise)).payload).payComponent);
+        Assert.Equal("Base", Assert.IsType<SalaryCorrectedPayload>(SingleEvent(Transaction(correction)).payload).payComponent);
+        Assert.Equal(2, SingleEvent(Transaction(raise)).schemaVersion);
+    }
+
+    [Fact]
+    public void Classify_CorrectionOfPayComponent_IsInvalidCorrection()
+    {
+        RawChange correction = Update(Salary(113, 37389m, May), Salary(113, 37389m, May, reason: "Correction") with { PayComponent = "Allowance" });
+
+        AssertDeadLetter(Transaction(correction), DeadLetterReasons.InvalidCorrection);
+    }
+
+    [Fact]
     public void Classify_SnapshotWithInvalidRow_IsInvalidRow()
     {
         TranslationOutcome outcome = Assert.Single(_classifier.Classify(new SnapshotRow(Snapshot(Salary(1, 42500m, Hired, currency: "XXX")))));

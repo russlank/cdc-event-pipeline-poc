@@ -14,19 +14,19 @@ namespace CdcPay.Contracts.Events
 	using global::Avro.Specific;
 	
 	/// <summary>
-	/// A business event about an employee's pay or position (topic hr.employee-pay.v1, contract version 1).
+	/// A business event about an employee's pay or position (topic hr.employee-pay.v1, contract version 2).
 	/// </summary>
 	[global::System.CodeDom.Compiler.GeneratedCodeAttribute("avrogen", "1.12.2+8fa2067f70e3012cb3fd9a8839cd97e8c7cc1772")]
 	public partial class PayEvent : global::Avro.Specific.ISpecificRecord
 	{
 		public static global::Avro.Schema _SCHEMA = global::Avro.Schema.Parse(("{\"type\":\"record\",\"name\":\"PayEvent\",\"doc\":\"A business event about an employee\'s pa" +
-				"y or position (topic hr.employee-pay.v1, contract version 1).\",\"namespace\":\"CdcP" +
+				"y or position (topic hr.employee-pay.v1, contract version 2).\",\"namespace\":\"CdcP" +
 				"ay.Contracts.Events\",\"fields\":[{\"name\":\"eventId\",\"doc\":\"Deterministic id derived" +
 				" from the source change; equal for replays of the same change.\",\"type\":{\"type\":\"" +
 				"string\",\"logicalType\":\"uuid\"}},{\"name\":\"eventType\",\"doc\":\"EmployeeHired, SalaryC" +
 				"hanged, SalaryCorrected, PositionChanged, or EmployeeTerminated; names the paylo" +
 				"ad branch.\",\"type\":\"string\"},{\"name\":\"schemaVersion\",\"doc\":\"Contract version fro" +
-				"m contracts/avro (1 for this schema).\",\"type\":\"int\"},{\"name\":\"tenantId\",\"type\":\"" +
+				"m contracts/avro (2 for this schema).\",\"type\":\"int\"},{\"name\":\"tenantId\",\"type\":\"" +
 				"int\"},{\"name\":\"employeeId\",\"type\":\"int\"},{\"name\":\"effectiveFrom\",\"doc\":\"Valid ti" +
 				"me: first day the fact applies.\",\"type\":{\"type\":\"int\",\"logicalType\":\"date\"}},{\"n" +
 				"ame\":\"effectiveTo\",\"doc\":\"Valid time: first day the fact no longer applies (excl" +
@@ -51,35 +51,41 @@ namespace CdcPay.Contracts.Events
 				"ts).\",\"default\":null,\"type\":[\"null\",{\"type\":\"record\",\"name\":\"InitialSalary\",\"nam" +
 				"espace\":\"CdcPay.Contracts.Events\",\"fields\":[{\"name\":\"salaryId\",\"type\":\"int\"},{\"n" +
 				"ame\":\"monthlyAmount\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":" +
-				"12,\"scale\":2}},{\"name\":\"currency\",\"type\":\"string\"}]}]},{\"name\":\"initialPosition\"" +
-				",\"doc\":\"Null for snapshot events.\",\"default\":null,\"type\":[\"null\",{\"type\":\"record" +
-				"\",\"name\":\"InitialPosition\",\"namespace\":\"CdcPay.Contracts.Events\",\"fields\":[{\"nam" +
-				"e\":\"positionId\",\"type\":\"int\"},{\"name\":\"title\",\"type\":\"string\"},{\"name\":\"level\",\"" +
-				"type\":\"int\"}]}]}]},{\"type\":\"record\",\"name\":\"SalaryChangedPayload\",\"namespace\":\"C" +
-				"dcPay.Contracts.Events\",\"fields\":[{\"name\":\"salaryId\",\"type\":\"int\"},{\"name\":\"mont" +
-				"hlyAmount\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":12,\"scale\"" +
-				":2}},{\"name\":\"currency\",\"type\":\"string\"},{\"name\":\"reason\",\"doc\":\"Raise, Promotio" +
-				"n, or (snapshot only) Hire.\",\"type\":\"string\"},{\"name\":\"previousMonthlyAmount\",\"d" +
-				"efault\":null,\"type\":[\"null\",{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":" +
-				"12,\"scale\":2}]}]},{\"type\":\"record\",\"name\":\"SalaryCorrectedPayload\",\"namespace\":\"" +
-				"CdcPay.Contracts.Events\",\"fields\":[{\"name\":\"salaryId\",\"type\":\"int\"},{\"name\":\"mon" +
-				"thlyAmount\",\"doc\":\"Amount after the correction.\",\"type\":{\"type\":\"bytes\",\"logical" +
-				"Type\":\"decimal\",\"precision\":12,\"scale\":2}},{\"name\":\"currency\",\"type\":\"string\"},{" +
-				"\"name\":\"changedFields\",\"doc\":\"Subset of MonthlyAmount, EffectiveFrom, EffectiveT" +
-				"o.\",\"type\":{\"type\":\"array\",\"items\":\"string\"}},{\"name\":\"previousMonthlyAmount\",\"d" +
-				"oc\":\"Set when changedFields has MonthlyAmount.\",\"default\":null,\"type\":[\"null\",{\"" +
-				"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":12,\"scale\":2}]},{\"name\":\"previ" +
-				"ousEffectiveFrom\",\"doc\":\"Set when changedFields has EffectiveFrom.\",\"default\":nu" +
-				"ll,\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}]},{\"name\":\"previousEffecti" +
-				"veTo\",\"doc\":\"Meaningful when changedFields has EffectiveTo; null then means the " +
-				"period was open-ended.\",\"default\":null,\"type\":[\"null\",{\"type\":\"int\",\"logicalType" +
-				"\":\"date\"}]}]},{\"type\":\"record\",\"name\":\"PositionChangedPayload\",\"namespace\":\"CdcP" +
-				"ay.Contracts.Events\",\"fields\":[{\"name\":\"positionId\",\"type\":\"int\"},{\"name\":\"title" +
-				"\",\"type\":\"string\"},{\"name\":\"level\",\"type\":\"int\"},{\"name\":\"previousTitle\",\"defaul" +
-				"t\":null,\"type\":[\"null\",\"string\"]},{\"name\":\"previousLevel\",\"default\":null,\"type\":" +
-				"[\"null\",\"int\"]}]},{\"type\":\"record\",\"name\":\"EmployeeTerminatedPayload\",\"namespace" +
-				"\":\"CdcPay.Contracts.Events\",\"fields\":[{\"name\":\"terminationDate\",\"type\":{\"type\":\"" +
-				"int\",\"logicalType\":\"date\"}}]}]}]}"));
+				"12,\"scale\":2}},{\"name\":\"currency\",\"type\":\"string\"},{\"name\":\"payComponent\",\"doc\":" +
+				"\"Salary.PayComponent; Base when the source has no such column (contract version " +
+				"1 data).\",\"default\":\"Base\",\"type\":\"string\"}]}]},{\"name\":\"initialPosition\",\"doc\":" +
+				"\"Null for snapshot events.\",\"default\":null,\"type\":[\"null\",{\"type\":\"record\",\"name" +
+				"\":\"InitialPosition\",\"namespace\":\"CdcPay.Contracts.Events\",\"fields\":[{\"name\":\"pos" +
+				"itionId\",\"type\":\"int\"},{\"name\":\"title\",\"type\":\"string\"},{\"name\":\"level\",\"type\":\"" +
+				"int\"}]}]}]},{\"type\":\"record\",\"name\":\"SalaryChangedPayload\",\"namespace\":\"CdcPay.C" +
+				"ontracts.Events\",\"fields\":[{\"name\":\"salaryId\",\"type\":\"int\"},{\"name\":\"monthlyAmou" +
+				"nt\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":12,\"scale\":2}},{\"" +
+				"name\":\"currency\",\"type\":\"string\"},{\"name\":\"reason\",\"doc\":\"Raise, Promotion, or (" +
+				"snapshot only) Hire.\",\"type\":\"string\"},{\"name\":\"previousMonthlyAmount\",\"default\"" +
+				":null,\"type\":[\"null\",{\"type\":\"bytes\",\"logicalType\":\"decimal\",\"precision\":12,\"sca" +
+				"le\":2}]},{\"name\":\"payComponent\",\"doc\":\"Salary.PayComponent; Base when the source" +
+				" has no such column (contract version 1 data).\",\"default\":\"Base\",\"type\":\"string\"" +
+				"}]},{\"type\":\"record\",\"name\":\"SalaryCorrectedPayload\",\"namespace\":\"CdcPay.Contrac" +
+				"ts.Events\",\"fields\":[{\"name\":\"salaryId\",\"type\":\"int\"},{\"name\":\"monthlyAmount\",\"d" +
+				"oc\":\"Amount after the correction.\",\"type\":{\"type\":\"bytes\",\"logicalType\":\"decimal" +
+				"\",\"precision\":12,\"scale\":2}},{\"name\":\"currency\",\"type\":\"string\"},{\"name\":\"change" +
+				"dFields\",\"doc\":\"Subset of MonthlyAmount, EffectiveFrom, EffectiveTo.\",\"type\":{\"t" +
+				"ype\":\"array\",\"items\":\"string\"}},{\"name\":\"previousMonthlyAmount\",\"doc\":\"Set when " +
+				"changedFields has MonthlyAmount.\",\"default\":null,\"type\":[\"null\",{\"type\":\"bytes\"," +
+				"\"logicalType\":\"decimal\",\"precision\":12,\"scale\":2}]},{\"name\":\"previousEffectiveFr" +
+				"om\",\"doc\":\"Set when changedFields has EffectiveFrom.\",\"default\":null,\"type\":[\"nu" +
+				"ll\",{\"type\":\"int\",\"logicalType\":\"date\"}]},{\"name\":\"previousEffectiveTo\",\"doc\":\"M" +
+				"eaningful when changedFields has EffectiveTo; null then means the period was ope" +
+				"n-ended.\",\"default\":null,\"type\":[\"null\",{\"type\":\"int\",\"logicalType\":\"date\"}]},{\"" +
+				"name\":\"payComponent\",\"doc\":\"Salary.PayComponent; Base when the source has no suc" +
+				"h column (contract version 1 data).\",\"default\":\"Base\",\"type\":\"string\"}]},{\"type\"" +
+				":\"record\",\"name\":\"PositionChangedPayload\",\"namespace\":\"CdcPay.Contracts.Events\"," +
+				"\"fields\":[{\"name\":\"positionId\",\"type\":\"int\"},{\"name\":\"title\",\"type\":\"string\"},{\"" +
+				"name\":\"level\",\"type\":\"int\"},{\"name\":\"previousTitle\",\"default\":null,\"type\":[\"null" +
+				"\",\"string\"]},{\"name\":\"previousLevel\",\"default\":null,\"type\":[\"null\",\"int\"]}]},{\"t" +
+				"ype\":\"record\",\"name\":\"EmployeeTerminatedPayload\",\"namespace\":\"CdcPay.Contracts.E" +
+				"vents\",\"fields\":[{\"name\":\"terminationDate\",\"type\":{\"type\":\"int\",\"logicalType\":\"d" +
+				"ate\"}}]}]}]}"));
 		/// <summary>
 		/// Deterministic id derived from the source change; equal for replays of the same change.
 		/// </summary>
@@ -89,7 +95,7 @@ namespace CdcPay.Contracts.Events
 		/// </summary>
 		private string _eventType;
 		/// <summary>
-		/// Contract version from contracts/avro (1 for this schema).
+		/// Contract version from contracts/avro (2 for this schema).
 		/// </summary>
 		private int _schemaVersion;
 		private int _tenantId;
@@ -148,7 +154,7 @@ namespace CdcPay.Contracts.Events
 			}
 		}
 		/// <summary>
-		/// Contract version from contracts/avro (1 for this schema).
+		/// Contract version from contracts/avro (2 for this schema).
 		/// </summary>
 		public int schemaVersion
 		{

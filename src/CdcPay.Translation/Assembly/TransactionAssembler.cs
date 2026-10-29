@@ -8,18 +8,21 @@ namespace CdcPay.Translation.Assembly;
 /// when its END event has arrived and every per-table count it announces is met.
 /// Transactions are released in the order of their END events (commit order); a later
 /// complete transaction waits for an earlier incomplete one until that times out.
+/// Redelivery is expected (Debezium restarts its task and Kafka delivers at least once):
+/// a row repeated within a transaction, or a row or END of a recently released transaction,
+/// is a duplicate and is discarded. A row a released transaction never had is abandoned.
 /// Not thread-safe: one consumer loop owns it.
 /// </summary>
 public sealed class TransactionAssembler
 {
-    private const int ClosedIdsToRemember = 10_000;
+    private const int ReleasedToRemember = 10_000;
 
     private readonly TimeProvider _clock;
     private readonly TimeSpan _timeout;
     private readonly Dictionary<string, OpenTransaction> _open = new(StringComparer.Ordinal);
     private readonly Queue<string> _endOrder = new();
-    private readonly HashSet<string> _closed = new(StringComparer.Ordinal);
-    private readonly Queue<string> _closedOrder = new();
+    private readonly Dictionary<string, HashSet<long>> _released = new(StringComparer.Ordinal);
+    private readonly Queue<string> _releasedOrder = new();
     private readonly List<AssemblerOutput> _ready = [];
 
     public TransactionAssembler(TimeProvider clock, TimeSpan timeout)
@@ -43,13 +46,21 @@ public sealed class TransactionAssembler
             return;
         }
 
-        if (_closed.Contains(change.TransactionId))
+        if (_released.TryGetValue(change.TransactionId, out HashSet<long>? releasedRows))
         {
-            _ready.Add(new AbandonedTransaction(change.TransactionId, [change], null, "row arrived after its transaction was closed"));
+            _ready.Add(change.TotalOrder is { } order && releasedRows.Contains(order)
+                ? new Discarded(change.Message.Position)
+                : new AbandonedTransaction(change.TransactionId, [change], null, "row that its already released transaction did not have"));
             return;
         }
 
         OpenTransaction transaction = GetOrOpen(change.TransactionId);
+        if (transaction.Rows.Any(row => row.TotalOrder == change.TotalOrder))
+        {
+            _ready.Add(new Discarded(change.Message.Position));
+            return;
+        }
+
         transaction.Rows.Add(change);
         ReleaseCompleted();
     }
@@ -58,7 +69,7 @@ public sealed class TransactionAssembler
     {
         ArgumentNullException.ThrowIfNull(marker);
 
-        if (marker.Status == TransactionStatus.Begin || _closed.Contains(marker.TransactionId))
+        if (marker.Status == TransactionStatus.Begin || _released.ContainsKey(marker.TransactionId))
         {
             _ready.Add(new Discarded(marker.Message.Position));
             return;
@@ -133,16 +144,15 @@ public sealed class TransactionAssembler
         }
     }
 
+    /// <summary>Removes a transaction from the open set and remembers its rows for duplicate detection.</summary>
     private void Close(OpenTransaction transaction)
     {
         _ = _open.Remove(transaction.Id);
-        if (_closed.Add(transaction.Id))
+        _released[transaction.Id] = [.. transaction.Rows.Select(row => row.TotalOrder ?? -1)];
+        _releasedOrder.Enqueue(transaction.Id);
+        if (_releasedOrder.Count > ReleasedToRemember)
         {
-            _closedOrder.Enqueue(transaction.Id);
-            if (_closedOrder.Count > ClosedIdsToRemember)
-            {
-                _ = _closed.Remove(_closedOrder.Dequeue());
-            }
+            _ = _released.Remove(_releasedOrder.Dequeue());
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using CdcPay.Contracts;
 
 namespace CdcPay.Translation.Raw;
 
@@ -144,7 +145,9 @@ public static class DebeziumParser
                 RequiredString(row, "Currency"),
                 Date(row, "EffectiveFrom"),
                 OptionalDate(row, "EffectiveTo"),
-                RequiredString(row, "Reason")),
+                RequiredString(row, "Reason"),
+                // Absent before the column was added (old capture instance): the contract default.
+                OptionalString(row, "PayComponent") ?? PayEventContract.DefaultPayComponent),
             "Position" => new PositionRow(
                 Int(row, "PositionId"),
                 Int(row, "TenantId"),

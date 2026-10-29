@@ -16,7 +16,7 @@ namespace CdcPay.Contracts.Events
 	[global::System.CodeDom.Compiler.GeneratedCodeAttribute("avrogen", "1.12.2+8fa2067f70e3012cb3fd9a8839cd97e8c7cc1772")]
 	public partial class SalaryCorrectedPayload : global::Avro.Specific.ISpecificRecord
 	{
-		public static global::Avro.Schema _SCHEMA = global::Avro.Schema.Parse(@"{""type"":""record"",""name"":""SalaryCorrectedPayload"",""namespace"":""CdcPay.Contracts.Events"",""fields"":[{""name"":""salaryId"",""type"":""int""},{""name"":""monthlyAmount"",""doc"":""Amount after the correction."",""type"":{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}},{""name"":""currency"",""type"":""string""},{""name"":""changedFields"",""doc"":""Subset of MonthlyAmount, EffectiveFrom, EffectiveTo."",""type"":{""type"":""array"",""items"":""string""}},{""name"":""previousMonthlyAmount"",""doc"":""Set when changedFields has MonthlyAmount."",""default"":null,""type"":[""null"",{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}]},{""name"":""previousEffectiveFrom"",""doc"":""Set when changedFields has EffectiveFrom."",""default"":null,""type"":[""null"",{""type"":""int"",""logicalType"":""date""}]},{""name"":""previousEffectiveTo"",""doc"":""Meaningful when changedFields has EffectiveTo; null then means the period was open-ended."",""default"":null,""type"":[""null"",{""type"":""int"",""logicalType"":""date""}]}]}");
+		public static global::Avro.Schema _SCHEMA = global::Avro.Schema.Parse(@"{""type"":""record"",""name"":""SalaryCorrectedPayload"",""namespace"":""CdcPay.Contracts.Events"",""fields"":[{""name"":""salaryId"",""type"":""int""},{""name"":""monthlyAmount"",""doc"":""Amount after the correction."",""type"":{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}},{""name"":""currency"",""type"":""string""},{""name"":""changedFields"",""doc"":""Subset of MonthlyAmount, EffectiveFrom, EffectiveTo."",""type"":{""type"":""array"",""items"":""string""}},{""name"":""previousMonthlyAmount"",""doc"":""Set when changedFields has MonthlyAmount."",""default"":null,""type"":[""null"",{""type"":""bytes"",""logicalType"":""decimal"",""precision"":12,""scale"":2}]},{""name"":""previousEffectiveFrom"",""doc"":""Set when changedFields has EffectiveFrom."",""default"":null,""type"":[""null"",{""type"":""int"",""logicalType"":""date""}]},{""name"":""previousEffectiveTo"",""doc"":""Meaningful when changedFields has EffectiveTo; null then means the period was open-ended."",""default"":null,""type"":[""null"",{""type"":""int"",""logicalType"":""date""}]},{""name"":""payComponent"",""doc"":""Salary.PayComponent; Base when the source has no such column (contract version 1 data)."",""default"":""Base"",""type"":""string""}]}");
 		private int _salaryId;
 		/// <summary>
 		/// Amount after the correction.
@@ -39,6 +39,10 @@ namespace CdcPay.Contracts.Events
 		/// Meaningful when changedFields has EffectiveTo; null then means the period was open-ended.
 		/// </summary>
 		private System.Nullable<System.DateTime> _previousEffectiveTo;
+		/// <summary>
+		/// Salary.PayComponent; Base when the source has no such column (contract version 1 data).
+		/// </summary>
+		private string _payComponent;
 		public virtual global::Avro.Schema Schema
 		{
 			get
@@ -138,6 +142,20 @@ namespace CdcPay.Contracts.Events
 				this._previousEffectiveTo = value;
 			}
 		}
+		/// <summary>
+		/// Salary.PayComponent; Base when the source has no such column (contract version 1 data).
+		/// </summary>
+		public string payComponent
+		{
+			get
+			{
+				return this._payComponent;
+			}
+			set
+			{
+				this._payComponent = value;
+			}
+		}
 		public virtual object Get(int fieldPos)
 		{
 			switch (fieldPos)
@@ -149,6 +167,7 @@ namespace CdcPay.Contracts.Events
 			case 4: return this.previousMonthlyAmount;
 			case 5: return this.previousEffectiveFrom;
 			case 6: return this.previousEffectiveTo;
+			case 7: return this.payComponent;
 			default: throw new global::Avro.AvroRuntimeException("Bad index " + fieldPos + " in Get()");
 			};
 		}
@@ -163,6 +182,7 @@ namespace CdcPay.Contracts.Events
 			case 4: this.previousMonthlyAmount = (System.Nullable<Avro.AvroDecimal>)fieldValue; break;
 			case 5: this.previousEffectiveFrom = (System.Nullable<System.DateTime>)fieldValue; break;
 			case 6: this.previousEffectiveTo = (System.Nullable<System.DateTime>)fieldValue; break;
+			case 7: this.payComponent = (System.String)fieldValue; break;
 			default: throw new global::Avro.AvroRuntimeException("Bad index " + fieldPos + " in Put()");
 			};
 		}
