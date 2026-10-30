@@ -143,7 +143,7 @@ public sealed class TelemetryTests
             headers = TranslatorActivities.TraceHeaders(publish);
         }
 
-        using (Activity? process = ProjectorActivities.StartProcess(PayEventContract.Topic, $"{PayEventContract.Topic} [[0]] @7", headers))
+        using (Activity? process = ProjectorActivities.StartProcess(PayEventContract.Topic, $"{PayEventContract.Topic}[0]@7", headers))
         {
             ProjectorActivities.SetEvent(process, EventTypes.SalaryChanged, eventId);
             ProjectorActivities.SetOutcome(process, nameof(ProjectionResult.Applied));
@@ -158,9 +158,18 @@ public sealed class TelemetryTests
                 .Concat(typeof(ProjectorActivities).GetMethods(BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly))
                 .SelectMany(method => method.GetParameters()),
             parameter => Assert.True(
-                parameter.ParameterType == typeof(Activity) || parameter.ParameterType == typeof(Headers) || DiagnosticSafetyTests.IsBounded(parameter)
+                parameter.ParameterType == typeof(Activity) || parameter.ParameterType == typeof(Headers)
+                || parameter.ParameterType == typeof(TopicPartitionOffset) || DiagnosticSafetyTests.IsBounded(parameter)
                 || parameter.Name is "outcome",
                 $"span helper takes {parameter.Name}"));
+    }
+
+    [Fact]
+    public void Position_IsWrittenLikeTheTranslators()
+    {
+        Assert.Equal(
+            "hr.employee-pay.v1[1]@1083",
+            ProjectorActivities.Position(new TopicPartitionOffset(PayEventContract.Topic, new Partition(1), new Offset(1083))));
     }
 
     [Fact]

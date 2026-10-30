@@ -15,6 +15,13 @@ public static class ProjectorActivities
 
     private static readonly ActivitySource Source = new(SourceName);
 
+    /// <summary>A Kafka position as the translator writes it: <c>topic[partition]@offset</c>.</summary>
+    public static string Position(TopicPartitionOffset position)
+    {
+        ArgumentNullException.ThrowIfNull(position);
+        return $"{position.Topic}[{position.Partition.Value}]@{position.Offset.Value}";
+    }
+
     /// <summary>
     /// A consumer span for one message, continuing the trace of the translator's span when the
     /// message carries a <c>traceparent</c> header; null when nobody listens.

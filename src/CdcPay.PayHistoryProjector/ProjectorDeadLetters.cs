@@ -38,6 +38,6 @@ public sealed class ProjectorDeadLetters(
             new Message<byte[]?, byte[]> { Key = result.Message.Key, Value = result.Message.Value ?? [], Headers = headers },
             cancellationToken);
         metrics.DeadLettered(reason);
-        ProjectorLogs.DeadLettered(logger, result.TopicPartitionOffset.ToString(), reason, detail);
+        ProjectorLogs.DeadLettered(logger, ProjectorActivities.Position(result.TopicPartitionOffset), reason, detail);
     }
 }

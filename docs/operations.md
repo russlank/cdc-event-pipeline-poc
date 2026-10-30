@@ -207,6 +207,7 @@ bash scripts/drills/03-retention-exceeded.sh  # Connect down past the CDC retent
 bash scripts/drills/04-projector-killed.sh  # projector killed (SIGKILL) while it works through a backlog
 bash scripts/drills/05-column-without-capture-instance.sh  # column added without a new capture instance
 bash scripts/drills/06-incompatible-schema.sh  # breaking schema tried on every path into the pipeline
+bash scripts/drills/07-poison-messages.sh   # poison messages scenario 7 does not send; DlqNotEmpty
 ```
 
 Drill 1 commits a raise and stops Connect as soon as Debezium has sent its
@@ -254,6 +255,15 @@ translator's serializer does), the CI gate with the example as contract v3,
 and a throwaway subject with compatibility `NONE`. It passes when the first
 four stop it, the live subject keeps its versions, and a raise still flows;
 it also requires the registry default to be `FULL_TRANSITIVE`.
+
+Drill 7 sends four poison messages that scenario 7 does not: JSON that is
+not a Debezium change (Employee topic), a tombstone (Salary topic), a
+transaction marker without its fields, and bytes in the Avro wire format with
+an unknown schema id (business topic). Each carries row-like text that must
+not appear in a `dlq.error` header or a log line. It passes when all are
+dead-lettered with reason and component, a raise still reaches the read
+model, and `DlqNotEmpty` fires and resolves (about 5 minutes after the last
+dead letter, `RESOLVE_SECONDS`).
 
 ### Connector Down Longer Than the CDC Retention
 

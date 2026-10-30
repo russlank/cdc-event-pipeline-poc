@@ -76,7 +76,7 @@ public sealed class ProjectorWorker(
 
     private async Task HandleAsync(ConsumeResult<byte[]?, byte[]> result, CancellationToken stoppingToken)
     {
-        string position = result.TopicPartitionOffset.ToString();
+        string position = ProjectorActivities.Position(result.TopicPartitionOffset);
         using Activity? activity = ProjectorActivities.StartProcess(result.Topic, position, result.Message.Headers);
         PayEvent? payEvent;
         try

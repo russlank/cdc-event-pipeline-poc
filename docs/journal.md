@@ -11,6 +11,34 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-30: Drill 7, poison messages
+
+- **Setup:** four messages scenario 7 does not send, each with row-like text
+  ("Sentinel Officer", 98765.43): JSON of another shape on
+  `cdc.HrCore.dbo.Employee`, a tombstone on `cdc.HrCore.dbo.Salary`, a
+  marker `{"status":"END","id":...}` on `cdc.transaction`, and bytes in the
+  Avro wire format with schema id 999999 on `hr.employee-pay.v1`; then a
+  raise: `bash scripts/drills/07-poison-messages.sh`.
+- **What happened:** all four in `hr.dlq`: translator `Unparseable`
+  (`Missing field 'source'.`, `invalid JSON at line 0, byte 0` for the
+  tombstone, `Missing field 'ts_ms'.` for the marker), projector
+  `Undeserializable` (`SchemaRegistryException: not a business event of the
+  contract`), each with `dlq.component` and `dlq.source.*` headers and the
+  original message as value. The raise was applied; both services stayed
+  healthy. `DlqNotEmpty` fired 22 s after the messages (`4 messages
+  dead-lettered in the last 5 minutes`) and resolved after the 5-minute
+  window. The sentinel text was in no `dlq.error` header and no log line.
+- **Found:** the projector logged positions as `hr.employee-pay.v1 [[1]]
+  @1083` (`TopicPartitionOffset.ToString()`), the translator as
+  `cdc.HrCore.dbo.Salary[0]@2135`. The projector now writes the translator's
+  form, in logs and the span attribute; a unit test pins it.
+- **Drill script lessons:** the Avro-like message has NUL bytes, so `grep`
+  reported "Binary file matches" instead of the dead letters (`grep -a`); the
+  console tools' `--property` is deprecated in Kafka 4.3
+  (`--reader-property`, `--formatter-property`).
+- **Conclusion:** the dead-letter path covers malformed input on every
+  consumed topic, including the transaction topic, without quoting content.
+
 ### 2026-10-30: Drill 6, a schema change that breaks compatibility
 
 - **Setup:** the breaking example (contract v2 with
