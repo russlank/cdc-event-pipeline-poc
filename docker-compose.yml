@@ -115,6 +115,9 @@ services:
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:9092
       SCHEMA_REGISTRY_KAFKASTORE_TOPIC_REPLICATION_FACTOR: 1
+      # Default for subjects without their own setting (a new topic's subject): the per-subject
+      # FULL_TRANSITIVE of the contracts, not the image's BACKWARD, which does not protect old readers.
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: full_transitive
     ports:
       - "127.0.0.1:8081:8081"
     mem_limit: 768m

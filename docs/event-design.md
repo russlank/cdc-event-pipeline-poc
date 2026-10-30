@@ -172,6 +172,16 @@ A replay of raw topics (scenario 6) dead-letters the same bad messages again;
 - Producers never register schemas. `contracts/scripts/register-schema.sh`
   (the `schemas-init` job) is the only way a version enters the registry, and
   the serializer looks up the id of the exact schema it was generated from.
+  A schema that was never registered has no id (HTTP 404 on lookup), so a
+  producer built from it cannot write.
+- The registry's default for subjects without their own setting is
+  `FULL_TRANSITIVE` too (`SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL`), so a
+  new subject, for example of a new topic version, is protected from its
+  first version. The image's default, `BACKWARD`, would not protect old
+  readers.
+- The registry has no authentication in this stack: anyone who reaches it can
+  lower a subject's compatibility, and a breaking schema then registers. The
+  CI gate still rejects it; a production registry needs access control.
 - The C# classes in `src/CdcPay.Contracts/Generated` are generated from the
   latest schema (`contracts/scripts/generate-csharp.sh`); a unit test fails when
   the two differ.

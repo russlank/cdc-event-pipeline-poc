@@ -206,6 +206,7 @@ bash scripts/drills/02-agent-stopped.sh     # SQL Server Agent stopped, changes 
 bash scripts/drills/03-retention-exceeded.sh  # Connect down past the CDC retention, re-snapshot
 bash scripts/drills/04-projector-killed.sh  # projector killed (SIGKILL) while it works through a backlog
 bash scripts/drills/05-column-without-capture-instance.sh  # column added without a new capture instance
+bash scripts/drills/06-incompatible-schema.sh  # breaking schema tried on every path into the pipeline
 ```
 
 Drill 1 commits a raise and stops Connect as soon as Debezium has sent its
@@ -245,6 +246,14 @@ instance, updates only that column for one employee, commits a raise, and
 runs a backfill, first as is and then with the column excluded in the
 connector. It drops the column and restores the connector configuration at
 the end, also when it fails. See the next section for what it shows.
+
+Drill 6 tries the breaking example (`contracts/examples/breaking`) on every
+path: the registry's compatibility check, registration under the live
+subject (what an auto-registering producer does), a lookup (what the
+translator's serializer does), the CI gate with the example as contract v3,
+and a throwaway subject with compatibility `NONE`. It passes when the first
+four stop it, the live subject keeps its versions, and a raise still flows;
+it also requires the registry default to be `FULL_TRANSITIVE`.
 
 ### Connector Down Longer Than the CDC Retention
 

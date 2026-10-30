@@ -11,6 +11,31 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-30: Drill 6, a schema change that breaks compatibility
+
+- **Setup:** the breaking example (contract v2 with
+  `SalaryChangedPayload.monthlyAmount` renamed to `amount`) against the live
+  registry: `bash scripts/drills/06-incompatible-schema.sh`.
+- **What happened:** stopped on every path into the pipeline. The
+  compatibility check said `is_compatible: false` (`MISSING_UNION_BRANCH`);
+  registering it under `hr.employee-pay.v1-value`, as an auto-registering
+  producer would, gave HTTP 409; looking it up, as the translator's
+  serializer does, gave HTTP 404 `Schema not found`, so no producer built
+  from it gets an id to write with; the CI gate with the example as contract
+  v3 failed (`HTTP 409 ... not FULL_TRANSITIVE compatible`). The live subject
+  kept versions 1 and 2, and a raise made afterwards flowed through.
+- **Found:** two weaknesses around the gate. The registry's default level was
+  `BACKWARD` (the image default): the live subject has `FULL_TRANSITIVE` of
+  its own, but a new subject, for example of a topic `hr.employee-pay.v2`,
+  would have started without protection for old readers. And compatibility
+  is a setting anyone with registry access can change: on a throwaway copy of
+  the subject, lowered to `NONE`, the breaking schema registered (HTTP 200).
+- **Fix and conclusion:** `SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL:
+  full_transitive` in compose and in the Woodpecker service; the drill now
+  requires it. Access control for the registry is out of scope for the PoC;
+  the CI gate does not depend on the registry's setting and still rejects the
+  change. Documented in [event-design.md](event-design.md).
+
 ### 2026-10-30: Drill 5, a column added without a new capture instance
 
 - **Setup:** `ALTER TABLE dbo.Salary ADD ApprovedBy varchar(20) NULL` with
