@@ -10,12 +10,14 @@
 # up in a dlq.error header or a log line.
 # Expected: each poison message is dead-lettered with its reason and component, or dropped for a
 # stated reason; translator and projector keep going (the raise is applied); DlqNotEmpty fires and
-# resolves once nothing more is dead-lettered for 5 minutes (at most RESOLVE_SECONDS, default 600).
+# resolves once nothing more is dead-lettered for 5 minutes (at most RESOLVE_SECONDS, default 600;
+# SKIP_RESOLVE=1 stops after the alert fired, as the walkthrough does).
 # Run on a caught-up stack while the source is otherwise quiet.
 
 source "$(dirname "$0")/lib.sh"
 
 resolve_seconds=${RESOLVE_SECONDS:-600}
+skip_resolve=${SKIP_RESOLVE:-0}
 sentinel="Sentinel Officer"
 tag="drill-7-$(date -u +%Y%m%dT%H%M%SZ)"
 
@@ -80,8 +82,12 @@ docker compose ps event-translator pay-history-projector --format '{{.Service}}:
 echo "== DlqNotEmpty"
 wait_for 180 "DlqNotEmpty to fire" stalled_alert FIRING
 echo "fired"
-wait_for "$resolve_seconds" "DlqNotEmpty to resolve" stalled_alert RESOLVED
-echo "resolved"
+if [ "$skip_resolve" = 1 ]; then
+  echo "not waiting for the resolution (SKIP_RESOLVE=1): it comes about 5 minutes after the last dead letter"
+else
+  wait_for "$resolve_seconds" "DlqNotEmpty to resolve" stalled_alert RESOLVED
+  echo "resolved"
+fi
 print_alerts "$started"
 
 headers_with_sentinel=$(echo "$letters" | grep -oE 'dlq\.error:[^,]*' | grep -cF "$sentinel" || true)
@@ -92,4 +98,6 @@ echo "sentinel in dlq.error headers: $headers_with_sentinel; in log lines: $logs
 for topic in cdc.HrCore.dbo.Employee cdc.HrCore.dbo.Salary hr.employee-pay.v1; do
   echo "$letters" | grep -q "dlq.source.topic:$topic" || fail "the poison message on $topic was not dead-lettered"
 done
-pass "poison messages dead-lettered with reason and component, nothing quoted; both services kept going; DlqNotEmpty fired and resolved"
+alert_outcome="fired and resolved"
+[ "$skip_resolve" = 1 ] && alert_outcome="fired"
+pass "poison messages dead-lettered with reason and component, nothing quoted; both services kept going; DlqNotEmpty $alert_outcome"

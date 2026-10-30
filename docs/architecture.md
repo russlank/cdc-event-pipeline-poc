@@ -123,6 +123,15 @@ queries with a read-only login. Details: [read-model.md](read-model.md).
 - **Contracts in the registry.** Business event schemas are registered by
   script only; producers never auto-register, so an incompatible change is
   stopped at registration.
+- **Redelivery-aware transaction assembly.** Debezium writes a transaction's
+  END only when the next one begins and sends rows again after a task
+  restart. The translator lets a transaction wait until a later one has
+  begun, and recognises a resent change by its source position (see Event
+  Translator above).
+- **Repair is explicit.** `connect-watchdog` restarts the Debezium task
+  after one known, harmless failure and nothing else. Lossy repairs (a
+  re-snapshot after the CDC retention was exceeded) are operator actions with
+  a runbook in [operations.md](operations.md), so a loss is never hidden.
 - **One translator instance.** Assembling transactions across topics needs a
   single consumer. This is a deliberate PoC limitation.
 
