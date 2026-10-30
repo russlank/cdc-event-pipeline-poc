@@ -26,5 +26,14 @@ sql_rows "INSERT dbo.DebeziumSignal (id, type, data)
 
 wait_for 60 "Connect to start the incremental snapshot of dbo.$table" incremental_snapshot started "$table" "$since"
 echo "started; streaming continues while the table is read in chunks"
-wait_for 600 "the incremental snapshot of dbo.$table to finish" incremental_snapshot finished "$table" "$since"
+# Debezium logs a skipped table only as a warning and goes on streaming; that snapshot never finishes.
+snapshot_ended() {
+  incremental_snapshot finished "$table" "$since" || incremental_snapshot failed "$table" "$since"
+}
+wait_for 600 "the incremental snapshot of dbo.$table to finish" snapshot_ended
+if incremental_snapshot failed "$table" "$since"; then
+  docker compose logs --since "$since" --no-log-prefix connect 2>&1 \
+    | grep -A1 "Error while executing incremental snapshot for table 'HrCore.dbo.$table'" | tail -n 1 | cut -c 1-200
+  fail "Debezium skipped the incremental snapshot of dbo.$table (cause above); a column that the capture instance does not have is a known cause, see docs/operations.md"
+fi
 pass "incremental snapshot of dbo.$table finished ($id)"

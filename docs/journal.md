@@ -11,6 +11,36 @@ and fix, newest first. Failure drills add their results here as well.
 
 ## Entries
 
+### 2026-10-30: Drill 5, a column added without a new capture instance
+
+- **Setup:** `ALTER TABLE dbo.Salary ADD ApprovedBy varchar(20) NULL` with
+  capture instance `dbo_Salary` unchanged (columns `SalaryId` ..
+  `Reason`); an update that sets only `ApprovedBy` for 3002's open salary;
+  a raise for 3001; a backfill of Salary: `bash
+  scripts/drills/05-column-without-capture-instance.sh`.
+- **What happened:** consumers saw nothing new. The raise was captured (3
+  change rows) and published with the old eight columns. The update of
+  `ApprovedBy` alone produced no change row at all: SQL Server does not
+  record an update that changes no captured column. Debezium logged nothing
+  about the new column, also not after a Connect restart. But the backfill
+  hung: Debezium logged `Error while executing incremental snapshot for
+  table 'HrCore.dbo.Salary', skipping and continuing streaming` with
+  `IllegalArgumentException: Column 'ApprovedBy' not found in result set
+  'SalaryId, ..., Reason, ApprovedBy'`, a warning only, and the script waited
+  for a finish message that never came. A retry after a full re-snapshot
+  failed the same way; the full re-snapshot itself worked and left the column
+  out.
+- **Cause:** Debezium's schema of the table follows the capture instance; the
+  incremental snapshot selects from the live table, which has one column
+  more, and the row does not fit the schema.
+- **Fix and conclusion:** `scripts/ops/backfill.sh` now fails at once when
+  Debezium skips the table, with the cause line. With
+  `"column.exclude.list": "HrCore.dbo.Salary.ApprovedBy"` the backfill worked
+  again. Runbook in [operations.md](operations.md): a new column needs a new
+  capture instance to reach events, or an exclusion to keep backfills
+  working. The drill dropped the column and restored the connector
+  configuration; read model unchanged, no transaction dead-lettered.
+
 ### 2026-10-30: Drill 4, projector killed mid-backlog
 
 - **Setup:** projector stopped; 15 rounds of raises for 3001..3012 gave a

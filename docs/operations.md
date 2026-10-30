@@ -205,6 +205,7 @@ bash scripts/drills/01-connect-restart.sh   # Connect stopped mid-transaction, c
 bash scripts/drills/02-agent-stopped.sh     # SQL Server Agent stopped, changes made, started
 bash scripts/drills/03-retention-exceeded.sh  # Connect down past the CDC retention, re-snapshot
 bash scripts/drills/04-projector-killed.sh  # projector killed (SIGKILL) while it works through a backlog
+bash scripts/drills/05-column-without-capture-instance.sh  # column added without a new capture instance
 ```
 
 Drill 1 commits a raise and stops Connect as soon as Debezium has sent its
@@ -238,6 +239,12 @@ event is applied once, the read model matches the source, nothing is
 dead-lettered, and `scripts/ops/replay-projector.sh` rebuilds an identical
 history. `docker compose kill` does not trigger the restart policy, so the
 drill starts the projector itself.
+
+Drill 5 adds a column `ApprovedBy` to `dbo.Salary` without a new capture
+instance, updates only that column for one employee, commits a raise, and
+runs a backfill, first as is and then with the column excluded in the
+connector. It drops the column and restores the connector configuration at
+the end, also when it fails. See the next section for what it shows.
 
 ### Connector Down Longer Than the CDC Retention
 
@@ -323,6 +330,27 @@ After the migration, `scripts/checks/paycomponent-raise.sql` and
 The order matters: register the contract first, deploy a translator that
 reads both row shapes second, change the source third, drop the old capture
 instance last.
+
+### A Column Added Without a New Capture Instance
+
+A capture instance keeps the columns it was created with. A column added to
+the table later:
+
+- never reaches Kafka: change rows and Debezium's messages have the old
+  columns, and consumers see no difference;
+- is not captured even when it is the only column an update changes: SQL
+  Server writes no change row, so such an update is invisible downstream;
+- breaks the backfill of the table: Debezium reads the live table, finds a
+  column its schema does not have (`Column 'ApprovedBy' not found in result
+  set ...`), logs a warning, skips the table, and goes on streaming.
+  `scripts/ops/backfill.sh` stops with that line instead of waiting. A full
+  re-snapshot (`scripts/ops/resnapshot.sh`) still works and leaves the column
+  out.
+
+To carry the column into events, add a capture instance with it (as in the
+`Salary.PayComponent` migration above). To keep it out but restore the
+backfill, exclude it in the connector: `"column.exclude.list":
+"HrCore.dbo.Salary.ApprovedBy"`.
 
 ## Topics
 

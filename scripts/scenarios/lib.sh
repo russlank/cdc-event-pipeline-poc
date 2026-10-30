@@ -71,14 +71,15 @@ group_caught_up() {
   [ -n "$rows" ] && echo "$rows" | awk '{ if (!($6 == "0" || $5 == "0")) exit 1 }'
 }
 
-# incremental_snapshot <started|finished> <table> <since>: succeeds when Connect has logged the start
-# or the end of an incremental snapshot of dbo.<table> since <since>, an ISO 8601 time with a zone
-# (for example 2026-10-29T16:00:00Z).
+# incremental_snapshot <started|finished|failed> <table> <since>: succeeds when Connect has logged the
+# start, the end, or the failure of an incremental snapshot of dbo.<table> since <since>, an ISO 8601
+# time with a zone (for example 2026-10-29T16:00:00Z).
 incremental_snapshot() {
   local pattern
   case "$1" in
     started) pattern="Requested 'INCREMENTAL' snapshot of data collections '\\[HrCore\\.dbo\\.$2\\]'" ;;
     finished) pattern="incremental snapshotting of table 'HrCore\\.dbo\\.$2' finished" ;;
+    failed) pattern="Error while executing incremental snapshot for table 'HrCore\\.dbo\\.$2'" ;;
   esac
   docker compose logs --since "$3" connect 2>&1 | grep -qE "$pattern"
 }
