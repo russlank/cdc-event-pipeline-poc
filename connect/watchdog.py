@@ -3,7 +3,8 @@
 Debezium 3.6.2 (the code is unchanged in 3.7.0) fails its task after a Connect restart when the
 first poll finds no new change: the END of the transaction restored from the stored offset has no
 timestamp (NullPointerException in buildEndTransactionValue). A task restart streams normally
-again. Every other failure is left alone, so ConnectorNotRunning still fires for it; so it does
+again. Reported upstream as https://github.com/debezium/dbz/issues/2995 (with a fix); remove this
+watchdog once a Debezium release in use has the fix. Every other failure is left alone, so ConnectorNotRunning still fires for it; so it does
 when the known failure repeats more than MAX_RESTARTS times within WINDOW_SECONDS.
 
 Logs name the connector, the task, and counts, never the failure trace.

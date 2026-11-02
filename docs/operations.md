@@ -79,7 +79,8 @@ Settings that matter:
 
 After a Connect restart, Debezium 3.6.2 fails its task when the first poll
 finds no new change (`NullPointerException` in `buildEndTransactionValue`; the
-code is the same in 3.7.0). `connect-watchdog` (`connect/watchdog.py`) checks
+code is the same in 3.7.0; reported as
+[debezium/dbz#2995](https://github.com/debezium/dbz/issues/2995)). `connect-watchdog` (`connect/watchdog.py`) checks
 the task every 10 s and restarts it after exactly this failure, at most 3
 times in 10 minutes; any other failure it leaves alone, and
 `ConnectorNotRunning` fires. Its log has one line per restart:
